@@ -84,13 +84,12 @@ if st.button("Generate Video & Audio"):
         
         with st.spinner("Step 1/2: AI realistic video generate ho raha hai (1-2 min lag sakte hain)..."):
             try:
-                # Active and verified public video generation space
-                client = Client("Vchitect/Vchitect-2.0")
+                # Using a highly stable, public text-to-video space
+                client = Client("jbilcke/stable-video-diffusion")
                 
                 result = client.predict(
                     prompt=final_prompt,
-                    negative_prompt=STRICT_NEGATIVE_PROMPT,
-                    api_name="/video_generation"
+                    api_name="/predict"
                 )
                 
                 raw_video_path = result[0] if isinstance(result, (list, tuple)) else result
@@ -98,12 +97,13 @@ if st.button("Generate Video & Audio"):
                 shutil.copy(raw_video_path, temp_video)
                 
             except Exception as e:
-                # Fallback to another active open space if primary is overloaded
+                # Fallback to another public open space if primary is busy
                 try:
-                    client = Client("Kijai/HunyuanVideo")
+                    client = Client("akhaliq/AnimateDiff")
                     result = client.predict(
                         prompt=final_prompt,
-                        api_name="/predict"
+                        negative_prompt=STRICT_NEGATIVE_PROMPT,
+                        api_name="/generate"
                     )
                     raw_video_path = result[0] if isinstance(result, (list, tuple)) else result
                     temp_video = "temp_raw_video.mp4"
