@@ -7,15 +7,16 @@ import edge_tts
 from PIL import Image as PILImage
 import numpy as np
 
-# Safe MoviePy Import
+# Safe MoviePy Import & Compatibility Check
 try:
     from moviepy import VideoFileClip, AudioFileClip, ImageClip, CompositeVideoClip
+    MOVIEPY_V2 = True
 except ImportError:
     try:
         from moviepy.editor import VideoFileClip, AudioFileClip, ImageClip, CompositeVideoClip
+        MOVIEPY_V2 = False
     except ImportError:
-        from moviepy.video.io.VideoFileClip import VideoFileClip
-        from moviepy.audio.io.AudioFileClip import AudioFileClip
+        pass
 
 st.set_page_config(page_title="AI Realistic Model Video & Neural Voice Generator", layout="centered")
 st.title("AI Real-Life Model & Voice Generator")
@@ -67,7 +68,6 @@ if "Neural" in audio_choice:
 else:
     uploaded_audio = st.file_uploader("Apni Background .mp3 audio file upload karein", type=["mp3", "wav"])
 
-# Strict Realism Prompt Injection
 REALISM_BOOST = (
     ", photorealistic, real life raw footage, shot on 35mm lens, f/1.8 aperture, "
     "natural human skin texture, pores, realistic lighting, highly detailed, "
@@ -86,7 +86,6 @@ if st.button("Generate Realistic Video & Audio"):
         
         with st.spinner("Step 1/2: Photorealistic model image generate ho rahi hai..."):
             try:
-                # Free high-quality realistic image generation via Pollinations AI
                 import urllib.parse
                 encoded_prompt = urllib.parse.quote(final_prompt)
                 img_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={vid_width}&height={vid_height}&nologo=true&seed=42"
@@ -100,22 +99,23 @@ if st.button("Generate Realistic Video & Audio"):
                     st.error("Image generation failed. Please try again.")
                     st.stop()
                 
-                # Convert image into a cinematic moving video clip using MoviePy with slow zoom effect
                 temp_video = "temp_raw_video.mp4"
                 duration_sec = 5
                 
-                img_clip = ImageClip(img_path).set_duration(duration_sec)
+                # Compatible ImageClip initialization for both MoviePy v1 and v2
+                try:
+                    img_clip = ImageClip(img_path, duration=duration_sec)
+                except TypeError:
+                    img_clip = ImageClip(img_path).set_duration(duration_sec)
                 
-                # Apply smooth subtle zoom-in effect to make it feel alive and like a real video frame
                 def zoom_effect(get_frame, t):
                     frame = get_frame(t)
                     h, w, _ = frame.shape
-                    zoom_factor = 1.0 + (0.03 * (t / duration_sec)) # Gentle cinematic zoom
+                    zoom_factor = 1.0 + (0.03 * (t / duration_sec))
                     new_h, new_w = int(h / zoom_factor), int(w / zoom_factor)
                     y1, x1 = (h - new_h) // 2, (w - new_w) // 2
                     cropped = frame[y1:y1+new_h, x1:x1+new_w]
                     
-                    # Resize back to original dimensions using PIL
                     pil_img = PILImage.fromarray(cropped).resize((w, h), PILImage.Resampling.LANCZOS)
                     return np.array(pil_img)
 
