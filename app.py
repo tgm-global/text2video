@@ -4,8 +4,6 @@ import os
 import asyncio
 import edge_tts
 import urllib.parse
-from PIL import Image as PILImage
-import numpy as np
 
 # Safe MoviePy Import (v1 & v2 compatible)
 try:
@@ -13,11 +11,11 @@ try:
 except ImportError:
     from moviepy.editor import VideoFileClip, AudioFileClip, ImageClip
 
-st.set_page_config(page_title="Hinglish to Real Live-Action Reel Generator", layout="centered")
-st.title("Hinglish to Real Reel Generator")
-st.write("Hinglish prompt likhein, aur tool khud real live-action character, scene aur voiceover video taiyar kar dega.")
+st.set_page_config(page_title="Instagram Reel Generator (Static HD Art)", layout="centered")
+st.title("Instagram HD Reel Generator")
+st.write("Hinglish prompt se ekdum clean, real-looking HD image aur natural voiceover wali reel banayein.")
 
-# 1. Format Selection (Reels by default)
+# 1. Format Selection (Reels 9:16)
 aspect_ratio = st.selectbox(
     "Video Format Chunein:",
     ["9:16 (Instagram Reels / YouTube Shorts)", "16:9 (Landscape / Website)"]
@@ -31,7 +29,7 @@ else:
 # 2. Hinglish Prompt Input
 user_prompt = st.text_area(
     "Apna Prompt Hinglish ya English mein likhein:",
-    placeholder="Jaise: ek handsome Indian boy New Delhi ki street par evening light mein chal raha hai, candid expression"
+    placeholder="Jaise: ek handsome Indian boy cafe mein baitha hai, soft cinematic evening lighting, candid photo"
 )
 
 # 3. Voiceover & Character Settings
@@ -58,33 +56,33 @@ else:
     }
 
 chosen_label = st.selectbox("Neural Voice Model Chunein:", list(voice_options.keys()))
-selected_voice_key = voice_options[chosen_label] # Fixed dictionary access
+selected_voice_key = voice_options[chosen_label]
 
-# Strict Real Live-Action Booster (To avoid cartoon/animation)
+# Strict Real Live-Action Booster (Clean, HD, Non-animated look)
 LIVE_ACTION_BOOST = (
-    ", real live-action documentary footage, shot on 35mm lens, f/1.8 aperture, "
+    ", professional raw unedited DSLR photograph, shot on Sony A7R IV, 50mm lens, f/1.4 aperture, "
     "authentic human skin texture, natural pores, candid facial expressions, realistic ambient lighting, "
-    "real-world environment, zero cgi, zero animation, 8k resolution, photorealistic"
+    "real-world environment, zero cgi, zero animation, zero zoom, static sharp photo, 8k resolution, photorealistic"
 )
 
 async def generate_edge_tts(text, voice, output_file):
     communicate = edge_tts.Communicate(text, voice)
     await communicate.save(output_file)
 
-if st.button("Generate Real Reel Video"):
+if st.button("Generate HD Reel Video"):
     if not user_prompt.strip():
         st.warning("Kripya video ka prompt zaroor likhein.")
     elif not voice_text.strip():
         st.warning("Kripya voiceover script zaroor likhein.")
     else:
-        # Automatically structure the user's Hinglish prompt into a professional cinematic prompt
+        # Structure prompt
         base_subject = ""
         if "Female" in gender_choice:
-            base_subject = "A candid portrait of a real Indian young woman, "
+            base_subject = "A sharp candid portrait of a real Indian young woman, "
         elif "Male" in gender_choice:
-            base_subject = "A candid portrait of a real Indian young man, "
+            base_subject = "A sharp candid portrait of a real Indian young man, "
         else:
-            base_subject = "A realistic raw documentary video frame of "
+            base_subject = "A sharp realistic raw documentary photo of "
             
         final_prompt = f"{base_subject}{user_prompt.strip()}{LIVE_ACTION_BOOST}"
         
@@ -99,14 +97,14 @@ if st.button("Generate Real Reel Video"):
                 
                 if os.path.exists(audio_path):
                     temp_audio_clip = AudioFileClip(audio_path)
-                    target_duration = min(temp_audio_clip.duration + 0.5, 30.0) # Match exact audio duration
+                    target_duration = min(temp_audio_clip.duration + 0.5, 30.0)
                     temp_audio_clip.close()
             except Exception as e:
                 st.error(f"Voice generation error: {e}")
                 st.stop()
 
-        # Step 2: Generate Real Live-Action Visual Frame
-        with st.spinner("Step 2/3: Real live-action visual & camera motion render ho rahi hai..."):
+        # Step 2: Generate Sharp HD Static Image and Convert to Video (No Motion)
+        with st.spinner("Step 2/3: High-definition static image render ho rahi hai..."):
             try:
                 encoded_prompt = urllib.parse.quote(final_prompt)
                 img_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={vid_width}&height={vid_height}&model=flux-realism&nologo=true"
@@ -122,38 +120,20 @@ if st.button("Generate Real Reel Video"):
                 
                 temp_video = "temp_raw_reel_video.mp4"
                 
+                # Create a completely static ImageClip with zero movement/zoom
                 try:
                     img_clip = ImageClip(img_path, duration=target_duration)
                 except TypeError:
                     img_clip = ImageClip(img_path).set_duration(target_duration)
-                
-                # Smooth documentary camera push-in motion
-                def reel_camera_motion(get_frame, t):
-                    frame = get_frame(t)
-                    h, w, _ = frame.shape
-                    progress = t / target_duration
-                    zoom_factor = 1.01 + (0.025 * progress)
-                    new_h, new_w = int(h / zoom_factor), int(w / zoom_factor)
-                    
-                    y1 = (h - new_h) // 2
-                    x1 = (w - new_w) // 2
-                    
-                    cropped = frame[y1:y1+new_h, x1:x1+new_w]
-                    pil_img = PILImage.fromarray(cropped).resize((w, h), PILImage.Resampling.LANCZOS)
-                    return np.array(pil_img)
 
-                if hasattr(img_clip, "transform"):
-                    animated_clip = img_clip.transform(reel_camera_motion)
-                else:
-                    animated_clip = img_clip.fl(reel_camera_motion, keep_duration=True)
-
-                animated_clip.write_videofile(
+                img_clip.write_videofile(
                     temp_video, 
                     fps=24, 
                     codec="libx264", 
                     audio=False,
                     preset="medium"
                 )
+                img_clip.close()
                 
             except requests.exceptions.Timeout:
                 st.error("Server timeout ho gaya. Dobara Generate button dabayein.")
@@ -162,8 +142,8 @@ if st.button("Generate Real Reel Video"):
                 st.error(f"Video rendering error: {e}")
                 st.stop()
 
-        # Step 3: Merge Audio & Video Perfectly
-        with st.spinner("Step 3/3: Voiceover aur Video ko sync karke final reel ban rahi hai..."):
+        # Step 3: Merge Audio & Static Video Perfectly
+        with st.spinner("Step 3/3: Voiceover aur HD image ko sync karke final reel ban rahi hai..."):
             try:
                 video_clip = VideoFileClip(temp_video)
                 
@@ -199,14 +179,14 @@ if st.button("Generate Real Reel Video"):
                 if audio_path and os.path.exists(audio_path):
                     os.remove(audio_path)
                 
-                st.success("Aapki Instagram Reel taiyar hai!")
+                st.success("Aapki Instagram HD Reel taiyar hai!")
                 st.video(final_output_file)
                 
                 with open(final_output_file, "rb") as file:
                     st.download_button(
-                        label="Download Reel (MP4)",
+                        label="Download HD Reel (MP4)",
                         data=file,
-                        file_name="my_ai_reel.mp4",
+                        file_name="my_hd_reel.mp4",
                         mime="video/mp4"
                     )
                     
