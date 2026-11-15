@@ -95,14 +95,23 @@ if st.button("Generate Smart Video & Audio"):
                     image_obj = PILImage.open(uploaded_image)
                     image_obj.save(img_path)
                     
-                    result = client.predict(
-                        image=img_path,
-                        prompt=final_prompt,
-                        negative_prompt=STRICT_NEGATIVE_PROMPT,
-                        api_name="/image_to_video"
-                    )
+                    # Correct parameter mapping for image-to-video API endpoint
+                    try:
+                        result = client.predict(
+                            input_image_filepath=img_path,
+                            prompt=final_prompt,
+                            negative_prompt=STRICT_NEGATIVE_PROMPT,
+                            api_name="/image_to_video"
+                        )
+                    except Exception:
+                        # Fallback to standard 'image' parameter if needed
+                        result = client.predict(
+                            image=img_path,
+                            prompt=final_prompt,
+                            negative_prompt=STRICT_NEGATIVE_PROMPT,
+                            api_name="/image_to_video"
+                        )
                 else:
-                    # Sirf essential parameters rakhe gaye hain taaki koi invalid argument error na aaye
                     result = client.predict(
                         prompt=final_prompt,
                         negative_prompt=STRICT_NEGATIVE_PROMPT,
@@ -115,6 +124,7 @@ if st.button("Generate Smart Video & Audio"):
                 
             except Exception as e:
                 try:
+                    # Fallback to pure text-to-video if image mode encounters any schema mismatch
                     result = client.predict(
                         prompt=final_prompt,
                         negative_prompt=STRICT_NEGATIVE_PROMPT,
