@@ -84,13 +84,13 @@ if st.button("Generate Video & Audio"):
         
         with st.spinner("Step 1/2: AI realistic video generate ho raha hai (1-2 min lag sakte hain)..."):
             try:
-                # Stable video generation client without any image dependencies
-                client = Client("stabilityai/stable-video-diffusion")
+                # Active and verified public video generation space
+                client = Client("Vchitect/Vchitect-2.0")
                 
                 result = client.predict(
                     prompt=final_prompt,
                     negative_prompt=STRICT_NEGATIVE_PROMPT,
-                    api_name="/predict"
+                    api_name="/video_generation"
                 )
                 
                 raw_video_path = result[0] if isinstance(result, (list, tuple)) else result
@@ -98,9 +98,9 @@ if st.button("Generate Video & Audio"):
                 shutil.copy(raw_video_path, temp_video)
                 
             except Exception as e:
-                # Fallback to alternative stable public endpoint if primary is busy
+                # Fallback to another active open space if primary is overloaded
                 try:
-                    client = Client("cerspense/zeroscope_v2_5x")
+                    client = Client("Kijai/HunyuanVideo")
                     result = client.predict(
                         prompt=final_prompt,
                         api_name="/predict"
