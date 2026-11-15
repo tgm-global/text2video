@@ -1,22 +1,25 @@
 import streamlit as st
+import requests
 import shutil
 import os
 import asyncio
 import edge_tts
+from PIL import Image as PILImage
+import numpy as np
 
 # Safe MoviePy Import
 try:
-    from moviepy import VideoFileClip, AudioFileClip, ColorClip, TextClip, CompositeVideoClip
+    from moviepy import VideoFileClip, AudioFileClip, ImageClip, CompositeVideoClip
 except ImportError:
     try:
-        from moviepy.editor import VideoFileClip, AudioFileClip, ColorClip, TextClip, CompositeVideoClip
+        from moviepy.editor import VideoFileClip, AudioFileClip, ImageClip, CompositeVideoClip
     except ImportError:
         from moviepy.video.io.VideoFileClip import VideoFileClip
         from moviepy.audio.io.AudioFileClip import AudioFileClip
 
-st.set_page_config(page_title="AI Realistic Video & Neural Voice Generator", layout="centered")
-st.title("AI Realistic Video Generator")
-st.write("Text prompt se realistic video aur natural neural voiceover taiyar karein.")
+st.set_page_config(page_title="AI Realistic Model Video & Neural Voice Generator", layout="centered")
+st.title("AI Real-Life Model & Voice Generator")
+st.write("Text prompt se ekdam photorealistic model aur natural neural voiceover taiyar karein.")
 
 # 1. Format Selection
 aspect_ratio = st.selectbox(
@@ -29,10 +32,10 @@ if "9:16" in aspect_ratio:
 else:
     vid_width, vid_height = 1024, 576
 
-# 2. Text Prompt for Video
+# 2. Text Prompt for Realistic Model
 user_prompt = st.text_area(
-    "Video ka description prompt likhein (Simple English):",
-    placeholder="A romantic couple standing under streetlights on a foggy night, cinematic lighting, photorealistic"
+    "Video ka description likhein (Simple English):",
+    placeholder="A stylish professional model smiling and looking at the camera, cinematic lighting"
 )
 
 # 3. Audio & Neural Voice Options
@@ -47,7 +50,7 @@ selected_voice_key = "en-US-AriaNeural (Female - Professional & Natural)"
 if "Neural" in audio_choice:
     voice_text = st.text_input(
         "Voiceover ke liye text likhein:",
-        placeholder="Raat ka yeh silsila bhi kya khubsurat hai..."
+        placeholder="Discover the newest collection today, click the link below!"
     )
     
     voice_options = {
@@ -64,35 +67,65 @@ if "Neural" in audio_choice:
 else:
     uploaded_audio = st.file_uploader("Apni Background .mp3 audio file upload karein", type=["mp3", "wav"])
 
+# Strict Realism Prompt Injection
+REALISM_BOOST = (
+    ", photorealistic, real life raw footage, shot on 35mm lens, f/1.8 aperture, "
+    "natural human skin texture, pores, realistic lighting, highly detailed, "
+    "8k resolution, live action film, professional photography, no cartoon, no cgi"
+)
+
 async def generate_edge_tts(text, voice, output_file):
     communicate = edge_tts.Communicate(text, voice)
     await communicate.save(output_file)
 
-if st.button("Generate Video & Audio"):
+if st.button("Generate Realistic Video & Audio"):
     if not user_prompt.strip():
         st.warning("Pehle video ka description prompt likhein.")
     else:
-        with st.spinner("Step 1/2: Video frame rendering aur prompt processing ho rahi hai..."):
+        final_prompt = user_prompt.strip() + REALISM_BOOST
+        
+        with st.spinner("Step 1/2: Photorealistic model image generate ho rahi hai..."):
             try:
+                # Free high-quality realistic image generation via Pollinations AI
+                import urllib.parse
+                encoded_prompt = urllib.parse.quote(final_prompt)
+                img_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={vid_width}&height={vid_height}&nologo=true&seed=42"
+                
+                response = requests.get(img_url, timeout=30)
+                if response.status_code == 200:
+                    img_path = "temp_model_image.jpg"
+                    with open(img_path, "wb") as f:
+                        f.write(response.content)
+                else:
+                    st.error("Image generation failed. Please try again.")
+                    st.stop()
+                
+                # Convert image into a cinematic moving video clip using MoviePy with slow zoom effect
                 temp_video = "temp_raw_video.mp4"
+                duration_sec = 5
                 
-                # Cloud environment ke liye resilient background visual clip generation
-                # Yeh ensure karta hai ki DNS error ya network timeout hone par bhi app kabhi crash na ho
-                bg_clip = ColorClip(size=(vid_width, vid_height), color=(15, 15, 20), duration=5)
+                img_clip = ImageClip(img_path).set_duration(duration_sec)
                 
-                # Text overlay with user prompt summary
-                try:
-                    txt_clip = TextClip(user_prompt[:60] + "...", fontsize=24, color='white', size=(vid_width - 100, None)).set_duration(5).set_position('center')
-                    video_composition = CompositeVideoClip([bg_clip, txt_clip])
-                except Exception:
-                    video_composition = bg_clip
-                
-                video_composition.write_videofile(
+                # Apply smooth subtle zoom-in effect to make it feel alive and like a real video frame
+                def zoom_effect(get_frame, t):
+                    frame = get_frame(t)
+                    h, w, _ = frame.shape
+                    zoom_factor = 1.0 + (0.03 * (t / duration_sec)) # Gentle cinematic zoom
+                    new_h, new_w = int(h / zoom_factor), int(w / zoom_factor)
+                    y1, x1 = (h - new_h) // 2, (w - new_w) // 2
+                    cropped = frame[y1:y1+new_h, x1:x1+new_w]
+                    
+                    # Resize back to original dimensions using PIL
+                    pil_img = PILImage.fromarray(cropped).resize((w, h), PILImage.Resampling.LANCZOS)
+                    return np.array(pil_img)
+
+                zoomed_clip = img_clip.fl(zoom_effect, keep_duration=True)
+                zoomed_clip.write_videofile(
                     temp_video, 
                     fps=24, 
                     codec="libx264", 
                     audio=False,
-                    preset="ultrafast"
+                    preset="medium"
                 )
                 
             except Exception as e:
@@ -142,17 +175,19 @@ if st.button("Generate Video & Audio"):
                 video_clip.close()
                 if os.path.exists(temp_video):
                     os.remove(temp_video)
+                if os.path.exists(img_path):
+                    os.remove(img_path)
                 if audio_path and os.path.exists(audio_path):
                     os.remove(audio_path)
                 
-                st.success("Aapka Video aur Neural Voiceover taiyar hai!")
+                st.success("Aapka Photorealistic Model Video taiyar hai!")
                 st.video(final_output_file)
                 
                 with open(final_output_file, "rb") as file:
                     st.download_button(
                         label="Download Final Video (MP4)",
                         data=file,
-                        file_name="ai_voice_video.mp4",
+                        file_name="realistic_model_video.mp4",
                         mime="video/mp4"
                     )
                     
