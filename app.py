@@ -6,7 +6,7 @@ import asyncio
 import edge_tts
 from PIL import Image as PILImage
 
-# Safe MoviePy Import for both old and new versions
+# Safe MoviePy Import
 try:
     from moviepy import VideoFileClip, AudioFileClip
 except ImportError:
@@ -20,15 +20,11 @@ st.set_page_config(page_title="AI Smart Hybrid Video & Neural Voice Generator", 
 st.title("AI Smart Hybrid Realistic Video Generator")
 st.write("Photo upload karein (optional) ya sirf text prompt dein—code automatic realistic video aur natural neural voiceover taiyar kar dega.")
 
+# Format Selection (UI ke liye, prompt ko enrich karne me use hoga)
 aspect_ratio = st.selectbox(
     "Video Format Chunein:",
     ["9:16 (Instagram Reels / YouTube Shorts)", "16:9 (Landscape / Website)"]
 )
-
-if "9:16" in aspect_ratio:
-    width, height = 512, 768
-else:
-    width, height = 768, 512
 
 uploaded_image = st.file_uploader(
     "Apni Image Upload karein (Optional):",
@@ -37,7 +33,7 @@ uploaded_image = st.file_uploader(
 
 user_prompt = st.text_area(
     "Video ka description ya motion likhein (Simple English):",
-    placeholder="A stylish person smiling and looking at the camera, cinematic lighting"
+    placeholder="A romantic couple standing under streetlights on a foggy night, cinematic lighting"
 )
 
 audio_choice = st.radio(
@@ -51,7 +47,7 @@ selected_voice_key = "en-US-AriaNeural (Female - Professional & Natural)"
 if "Neural" in audio_choice:
     voice_text = st.text_input(
         "Voiceover ke liye text likhein:",
-        placeholder="Discover the newest collection today, click the link below!"
+        placeholder="Raat ka yeh silsila bhi kya khubsurat hai..."
     )
     
     voice_options = {
@@ -106,11 +102,10 @@ if st.button("Generate Smart Video & Audio"):
                         api_name="/image_to_video"
                     )
                 else:
+                    # Height/Width hata diya gaya hai taaki invalid argument error na aaye
                     result = client.predict(
                         prompt=final_prompt,
                         negative_prompt=STRICT_NEGATIVE_PROMPT,
-                        height=height,
-                        width=width,
                         num_frames=49,
                         api_name="/text_to_video"
                     )
@@ -124,8 +119,6 @@ if st.button("Generate Smart Video & Audio"):
                     result = client.predict(
                         prompt=final_prompt,
                         negative_prompt=STRICT_NEGATIVE_PROMPT,
-                        height=height,
-                        width=width,
                         num_frames=49,
                         api_name="/text_to_video"
                     )
@@ -153,7 +146,6 @@ if st.button("Generate Smart Video & Audio"):
                 if audio_path and os.path.exists(audio_path):
                     audio_clip = AudioFileClip(audio_path)
                     
-                    # Handle duration trimming based on available moviepy methods
                     if hasattr(audio_clip, "subclipped"):
                         if audio_clip.duration > video_clip.duration:
                             audio_clip = audio_clip.subclipped(0, video_clip.duration)
