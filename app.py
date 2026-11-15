@@ -4,7 +4,6 @@ import shutil
 import os
 import asyncio
 import edge_tts
-from PIL import Image as PILImage
 
 # Safe MoviePy Import
 try:
@@ -16,27 +15,23 @@ except ImportError:
         from moviepy.video.io.VideoFileClip import VideoFileClip
         from moviepy.audio.io.AudioFileClip import AudioFileClip
 
-st.set_page_config(page_title="AI Smart Hybrid Video & Neural Voice Generator", layout="centered")
-st.title("AI Smart Hybrid Realistic Video Generator")
-st.write("Text prompt se 100% realistic video aur natural neural voiceover taiyar karein.")
+st.set_page_config(page_title="AI Realistic Video & Neural Voice Generator", layout="centered")
+st.title("AI Realistic Video Generator")
+st.write("Text prompt se realistic video aur natural neural voiceover taiyar karein.")
 
-# Format Selection
+# 1. Format Selection
 aspect_ratio = st.selectbox(
     "Video Format Chunein:",
     ["9:16 (Instagram Reels / YouTube Shorts)", "16:9 (Landscape / Website)"]
 )
 
-# Optional Image (Information ya reference ke liye)
-uploaded_image = st.file_uploader(
-    "Apni Image Upload karein (Optional Reference):",
-    type=["jpg", "jpeg", "png"]
-)
-
+# 2. Text Prompt for Video
 user_prompt = st.text_area(
-    "Video ka description likhein (Simple English):",
-    placeholder="A romantic couple standing under streetlights on a foggy night, cinematic lighting"
+    "Video ka description prompt likhein (Simple English):",
+    placeholder="A romantic couple standing under streetlights on a foggy night, cinematic lighting, photorealistic"
 )
 
+# 3. Audio & Neural Voice Options
 audio_choice = st.radio(
     "Audio ke liye aap kya use karna chahte hain?",
     ["Neural AI Voiceover (100% Non-Robotic & Natural)", "Apna khud ka Song/Music upload karein (.mp3)"]
@@ -81,21 +76,21 @@ async def generate_edge_tts(text, voice, output_file):
     communicate = edge_tts.Communicate(text, voice)
     await communicate.save(output_file)
 
-if st.button("Generate Smart Video & Audio"):
+if st.button("Generate Video & Audio"):
     if not user_prompt.strip():
         st.warning("Pehle video ka description prompt likhein.")
     else:
         final_prompt = user_prompt.strip() + REALISM_BOOST
         
-        with st.spinner("Step 1/2: AI realistic video generate ho raha hai..."):
+        with st.spinner("Step 1/2: AI realistic video generate ho raha hai (1-2 min lag sakte hain)..."):
             try:
-                client = Client("Lightricks/ltx-video-distilled")
+                # Stable video generation client without any image dependencies
+                client = Client("stabilityai/stable-video-diffusion")
                 
-                # Direct & Reliable Text-to-Video execution to avoid any argument/mode mismatch errors
                 result = client.predict(
                     prompt=final_prompt,
                     negative_prompt=STRICT_NEGATIVE_PROMPT,
-                    api_name="/text_to_video"
+                    api_name="/predict"
                 )
                 
                 raw_video_path = result[0] if isinstance(result, (list, tuple)) else result
@@ -103,8 +98,19 @@ if st.button("Generate Smart Video & Audio"):
                 shutil.copy(raw_video_path, temp_video)
                 
             except Exception as e:
-                st.error(f"Video generation mein error aayi: {e}")
-                st.stop()
+                # Fallback to alternative stable public endpoint if primary is busy
+                try:
+                    client = Client("cerspense/zeroscope_v2_5x")
+                    result = client.predict(
+                        prompt=final_prompt,
+                        api_name="/predict"
+                    )
+                    raw_video_path = result[0] if isinstance(result, (list, tuple)) else result
+                    temp_video = "temp_raw_video.mp4"
+                    shutil.copy(raw_video_path, temp_video)
+                except Exception as inner_e:
+                    st.error(f"Video generation error: {inner_e}")
+                    st.stop()
 
         with st.spinner("Step 2/2: Audio/Voiceover merge kiya ja raha hai..."):
             try:
@@ -152,14 +158,14 @@ if st.button("Generate Smart Video & Audio"):
                 if audio_path and os.path.exists(audio_path):
                     os.remove(audio_path)
                 
-                st.success("Aapka Smart Realistic Video taiyar hai!")
+                st.success("Aapka Realistic Video taiyar hai!")
                 st.video(final_output_file)
                 
                 with open(final_output_file, "rb") as file:
                     st.download_button(
                         label="Download Final Video (MP4)",
                         data=file,
-                        file_name="smart_hybrid_video.mp4",
+                        file_name="realistic_ai_video.mp4",
                         mime="video/mp4"
                     )
                     
