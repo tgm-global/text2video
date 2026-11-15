@@ -5,13 +5,21 @@ import os
 import asyncio
 import edge_tts
 from PIL import Image as PILImage
-from moviepy.editor import VideoFileClip, AudioFileClip
+
+# Safe MoviePy Import for both old and new versions
+try:
+    from moviepy import VideoFileClip, AudioFileClip
+except ImportError:
+    try:
+        from moviepy.editor import VideoFileClip, AudioFileClip
+    except ImportError:
+        from moviepy.video.io.VideoFileClip import VideoFileClip
+        from moviepy.audio.io.AudioFileClip import AudioFileClip
 
 st.set_page_config(page_title="AI Smart Hybrid Video & Neural Voice Generator", layout="centered")
 st.title("AI Smart Hybrid Realistic Video Generator")
 st.write("Photo upload karein (optional) ya sirf text prompt dein—code automatic realistic video aur natural neural voiceover taiyar kar dega.")
 
-# 1. Format Selection
 aspect_ratio = st.selectbox(
     "Video Format Chunein:",
     ["9:16 (Instagram Reels / YouTube Shorts)", "16:9 (Landscape / Website)"]
@@ -22,19 +30,16 @@ if "9:16" in aspect_ratio:
 else:
     width, height = 768, 512
 
-# 2. Optional Image Upload for Image-to-Video
 uploaded_image = st.file_uploader(
-    "Apni Image Upload karein (Optional - Agar video me convert karana ho):",
+    "Apni Image Upload karein (Optional):",
     type=["jpg", "jpeg", "png"]
 )
 
-# 3. Text Prompt for Video / Motion Description
 user_prompt = st.text_area(
     "Video ka description ya motion likhein (Simple English):",
     placeholder="A stylish person smiling and looking at the camera, cinematic lighting"
 )
 
-# 4. Audio Choice & Ultra-Realistic Voice Selection
 audio_choice = st.radio(
     "Audio ke liye aap kya use karna chahte hain?",
     ["Neural AI Voiceover (100% Non-Robotic & Natural)", "Apna khud ka Song/Music upload karein (.mp3)"]
@@ -63,7 +68,6 @@ if "Neural" in audio_choice:
 else:
     uploaded_audio = st.file_uploader("Apni Background .mp3 audio file upload karein", type=["mp3", "wav"])
 
-# Realism Enhancers
 REALISM_BOOST = (
     ", photorealistic, real life raw footage, shot on 35mm lens, "
     "natural human skin texture, realistic lighting, ultra detailed, "
@@ -86,27 +90,22 @@ if st.button("Generate Smart Video & Audio"):
     else:
         final_prompt = user_prompt.strip() + REALISM_BOOST
         
-        # Step 1: Generate Video (Hybrid: Image-to-Video OR Text-to-Video)
         with st.spinner("Step 1/2: AI realistic video generate ho raha hai..."):
             try:
-                # Hum ek robust free model client use kar rahe hain jo dono modes support karta hai
                 client = Client("Lightricks/ltx-video-distilled")
                 
                 if uploaded_image is not None:
-                    # Agar user ne image di hai, toh image save karke image-to-video endpoint call karenge
                     img_path = "temp_input_image.png"
                     image_obj = PILImage.open(uploaded_image)
                     image_obj.save(img_path)
                     
-                    # LTX ya compatible image-to-video space call
                     result = client.predict(
                         image=img_path,
                         prompt=final_prompt,
                         negative_prompt=STRICT_NEGATIVE_PROMPT,
-                        api_name="/image_to_video" # Agar space ka API name alag ho toh automatic fallback handle hoga
+                        api_name="/image_to_video"
                     )
                 else:
-                    # Agar image nahi di, toh pure text-to-video
                     result = client.predict(
                         prompt=final_prompt,
                         negative_prompt=STRICT_NEGATIVE_PROMPT,
@@ -121,9 +120,7 @@ if st.button("Generate Smart Video & Audio"):
                 shutil.copy(raw_video_path, temp_video)
                 
             except Exception as e:
-                # Fallback agar image-to-video API name mein slight fark ho, toh text-to-video default trigger ho jayega
                 try:
-                    st.info("Switching to direct generation mode...")
                     result = client.predict(
                         prompt=final_prompt,
                         negative_prompt=STRICT_NEGATIVE_PROMPT,
@@ -139,7 +136,6 @@ if st.button("Generate Smart Video & Audio"):
                     st.error(f"Video generation mein error aayi: {inner_e}")
                     st.stop()
 
-        # Step 2: Handle Neural Voice / Audio & Merge
         with st.spinner("Step 2/2: Audio/Voiceover merge kiya ja raha hai..."):
             try:
                 video_clip = VideoFileClip(temp_video)
@@ -156,9 +152,19 @@ if st.button("Generate Smart Video & Audio"):
 
                 if audio_path and os.path.exists(audio_path):
                     audio_clip = AudioFileClip(audio_path)
-                    if audio_clip.duration > video_clip.duration:
-                        audio_clip = audio_clip.subclipped(0, video_clip.duration)
-                    final_clip = video_clip.with_audio(audio_clip)
+                    
+                    # Handle duration trimming based on available moviepy methods
+                    if hasattr(audio_clip, "subclipped"):
+                        if audio_clip.duration > video_clip.duration:
+                            audio_clip = audio_clip.subclipped(0, video_clip.duration)
+                    else:
+                        if audio_clip.duration > video_clip.duration:
+                            audio_clip = audio_clip.subclip(0, video_clip.duration)
+                            
+                    if hasattr(video_clip, "with_audio"):
+                        final_clip = video_clip.with_audio(audio_clip)
+                    else:
+                        final_clip = video_clip.set_audio(audio_clip)
                 else:
                     final_clip = video_clip
 
@@ -171,7 +177,6 @@ if st.button("Generate Smart Video & Audio"):
                     preset="medium"
                 )
                 
-                # Cleanup temporary files
                 video_clip.close()
                 if os.path.exists(temp_video):
                     os.remove(temp_video)
