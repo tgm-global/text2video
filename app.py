@@ -13,11 +13,11 @@ try:
 except ImportError:
     from moviepy.editor import VideoFileClip, AudioFileClip, ImageClip
 
-st.set_page_config(page_title="AI Real Live-Action Video & Voice Generator", layout="centered")
-st.title("AI Real Live-Action Video Generator")
-st.write("Text prompt se ekdam asli live-action footage aur natural neural voiceover taiyar karein.")
+st.set_page_config(page_title="Hinglish to Real Live-Action Reel Generator", layout="centered")
+st.title("Hinglish to Real Reel Generator")
+st.write("Hinglish prompt likhein, aur tool khud real live-action character, scene aur voiceover video taiyar kar dega.")
 
-# 1. Format Selection
+# 1. Format Selection (Reels by default)
 aspect_ratio = st.selectbox(
     "Video Format Chunein:",
     ["9:16 (Instagram Reels / YouTube Shorts)", "16:9 (Landscape / Website)"]
@@ -28,148 +28,125 @@ if "9:16" in aspect_ratio:
 else:
     vid_width, vid_height = 1024, 576
 
-# 2. Character Selection
-gender_choice = st.selectbox(
-    "Subject Kaun hai?",
-    [
-        "Real Indian Young Woman (Live-Action)",
-        "Real Indian Young Man (Live-Action)",
-        "Real Location / Street / Nature Scene (No Person)"
-    ]
-)
-
-# 3. Scene Prompt
+# 2. Hinglish Prompt Input
 user_prompt = st.text_area(
-    "Scene ka description likhein (Simple English):",
-    placeholder="Walking on a bustling Delhi street during evening time, natural expressions, candid shot"
+    "Apna Prompt Hinglish ya English mein likhein:",
+    placeholder="Jaise: ek handsome Indian boy New Delhi ki street par evening light mein chal raha hai, candid expression"
 )
 
-# 4. Audio & Neural Voice Options
-audio_choice = st.radio(
-    "Audio ke liye aap kya use karna chahte hain?",
-    ["Neural AI Voiceover (100% Non-Robotic & Natural)", "Apna khud ka Song/Music upload karein (.mp3)"]
+# 3. Voiceover & Character Settings
+gender_choice = st.selectbox(
+    "Character kiska hoga?",
+    ["Real Indian Young Woman (Female)", "Real Indian Young Man (Male)", "Sirf Location / Scene (No Person)"]
 )
 
-voice_text = ""
-selected_voice_key = "hi-IN-SwaraNeural"
+voice_text = st.text_area(
+    "Voiceover ke liye script likhein (Jo video mein boli jayegi):",
+    placeholder="Zindagi ke safar mein aksar wahi log aage badhte hain jo rukna nahi jaante..."
+)
 
-if "Neural" in audio_choice:
-    voice_text = st.text_input(
-        "Voiceover ke liye text likhein:",
-        placeholder="Zindagi ke safar mein aksar aisa hota hai..."
-    )
-    
-    if "Man" in gender_choice:
-        voice_options = {
-            "hi-IN-MadhurNeural (Hindi Male - Deep & Natural)": "hi-IN-MadhurNeural",
-            "en-IN-PrabhatNeural (Indian Male - Authoritative & Clear)": "en-IN-PrabhatNeural",
-            "en-US-GuyNeural (US Male - Deep)": "en-US-GuyNeural"
-        }
-    else:
-        voice_options = {
-            "hi-IN-SwaraNeural (Hindi Female - Natural & Expressive)": "hi-IN-SwaraNeural",
-            "en-IN-NeerjaNeural (Indian Female - Warm & Realistic)": "en-IN-NeerjaNeural",
-            "en-US-AriaNeural (US Female - Professional)": "en-US-AriaNeural"
-        }
-    
-    chosen_label = st.selectbox("Voice Model Chunein:", list(voice_options.keys()))
-    selected_voice_key = voice_options[chosen_label]
+# Voice Model Selection based on Gender
+if "Female" in gender_choice:
+    voice_options = {
+        "hi-IN-SwaraNeural (Hindi Female - Natural & Expressive)": "hi-IN-SwaraNeural",
+        "en-IN-NeerjaNeural (Indian Female - Warm & Realistic)": "en-IN-NeerjaNeural"
+    }
 else:
-    uploaded_audio = st.file_uploader("Apni Background .mp3 audio file upload karein", type=["mp3", "wav"])
+    voice_options = {
+        "hi-IN-MadhurNeural (Hindi Male - Deep & Natural)": "hi-IN-MadhurNeural",
+        "en-IN-PrabhatNeural (Indian Male - Authoritative & Clear)": "en-IN-PrabhatNeural"
+    }
 
-# Subject Prefix
-if "Woman" in gender_choice:
-    base_subject = "A candid portrait of a real Indian young woman, "
-elif "Man" in gender_choice:
-    base_subject = "A candid portrait of a real Indian young man, "
-else:
-    base_subject = "A realistic raw video frame of "
+selected_voice_key = list(voice_options.values()[0]) if isinstance(voice_options, dict) else "hi-IN-SwaraNeural"
+chosen_label = st.selectbox("Neural Voice Model Chunein:", list(voice_options.keys()))
+selected_voice_key = voice_options[chosen_label]
 
-# Strict Real Live-Action Footage Prompt (No 3D, No Movie Style)
+# Strict Real Live-Action Booster (To avoid cartoon/animation)
 LIVE_ACTION_BOOST = (
-    ", real live-action footage, documentary style, shot on 35mm lens, f/1.8 aperture, "
-    "natural human skin texture, pores, candid facial expressions, realistic ambient lighting, "
-    "real-world environment, zero cgi, zero animation, zero illustration, 8k resolution, photorealistic"
+    ", real live-action documentary footage, shot on 35mm lens, f/1.8 aperture, "
+    "authentic human skin texture, natural pores, candid facial expressions, realistic ambient lighting, "
+    "real-world environment, zero cgi, zero animation, 8k resolution, photorealistic"
 )
 
 async def generate_edge_tts(text, voice, output_file):
     communicate = edge_tts.Communicate(text, voice)
     await communicate.save(output_file)
 
-if st.button("Generate Real Live-Action Video"):
+if st.button("Generate Real Reel Video"):
     if not user_prompt.strip():
-        st.warning("Pehle scene ka description likhein.")
-    elif "Neural" in audio_choice and not voice_text.strip():
-        st.warning("Voiceover ke liye kuch text likhein.")
+        st.warning("Kripya video ka prompt zaroor likhein.")
+    elif not voice_text.strip():
+        st.warning("Kripya voiceover script zaroor likhein.")
     else:
+        # Automatically structure the user's Hinglish prompt into a professional cinematic prompt
+        base_subject = ""
+        if "Female" in gender_choice:
+            base_subject = "A candid portrait of a real Indian young woman, "
+        elif "Male" in gender_choice:
+            base_subject = "A candid portrait of a real Indian young man, "
+        else:
+            base_subject = "A realistic raw documentary video frame of "
+            
         final_prompt = f"{base_subject}{user_prompt.strip()}{LIVE_ACTION_BOOST}"
         
-        # Step 1: Audio Duration Check
+        # Step 1: Generate Neural Audio and Calculate Exact Duration
         audio_path = None
         target_duration = 6.0
         
-        with st.spinner("Step 1/3: Audio process ho rahi hai..."):
+        with st.spinner("Step 1/3: Natural neural voiceover generate ho raha hai..."):
             try:
-                if "Neural" in audio_choice and voice_text.strip():
-                    audio_path = "temp_neural_voice.mp3"
-                    asyncio.run(generate_edge_tts(voice_text, selected_voice_key, audio_path))
-                elif "upload" in audio_choice and 'uploaded_audio' in locals() and uploaded_audio is not None:
-                    audio_path = "temp_uploaded_audio.mp3"
-                    with open(audio_path, "wb") as f:
-                        f.write(uploaded_audio.getbuffer())
+                audio_path = "temp_neural_voice.mp3"
+                asyncio.run(generate_edge_tts(voice_text, selected_voice_key, audio_path))
                 
-                if audio_path and os.path.exists(audio_path):
+                if os.path.exists(audio_path):
                     temp_audio_clip = AudioFileClip(audio_path)
-                    target_duration = min(temp_audio_clip.duration + 0.5, 30.0)
+                    target_duration = min(temp_audio_clip.duration + 0.5, 30.0) # Match exact audio duration
                     temp_audio_clip.close()
             except Exception as e:
-                st.error(f"Audio processing error: {e}")
+                st.error(f"Voice generation error: {e}")
                 st.stop()
 
-        # Step 2: Real Live-Action Visual Render
-        with st.spinner("Step 2/3: Real live-action photograph render ho rahi hai..."):
+        # Step 2: Generate Real Live-Action Visual Frame
+        with st.spinner("Step 2/3: Real live-action visual & camera motion render ho rahi hai..."):
             try:
                 encoded_prompt = urllib.parse.quote(final_prompt)
                 img_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={vid_width}&height={vid_height}&model=flux-realism&nologo=true"
                 
                 response = requests.get(img_url, timeout=90)
                 if response.status_code == 200 and len(response.content) > 1000:
-                    img_path = "temp_live_frame.jpg"
+                    img_path = "temp_reel_frame.jpg"
                     with open(img_path, "wb") as f:
                         f.write(response.content)
                 else:
-                    st.error("Visual generation fail ho gaya. Dobara try karein.")
+                    st.error("Visual generation fail ho gaya. Dobara click karein.")
                     st.stop()
                 
-                temp_video = "temp_raw_live_video.mp4"
+                temp_video = "temp_raw_reel_video.mp4"
                 
                 try:
                     img_clip = ImageClip(img_path, duration=target_duration)
                 except TypeError:
                     img_clip = ImageClip(img_path).set_duration(target_duration)
                 
-                # Subtle documentary camera movement
-                def documentary_camera_motion(get_frame, t):
+                # Smooth documentary camera push-in motion
+                def reel_camera_motion(get_frame, t):
                     frame = get_frame(t)
                     h, w, _ = frame.shape
                     progress = t / target_duration
-                    zoom_factor = 1.01 + (0.02 * progress) # Very subtle camera push-in like real documentary
+                    zoom_factor = 1.01 + (0.025 * progress)
                     new_h, new_w = int(h / zoom_factor), int(w / zoom_factor)
                     
-                    max_y_offset = (h - new_h) // 2
-                    max_x_offset = (w - new_w) // 2
-                    
-                    y1 = int(max_y_offset)
-                    x1 = int(max_x_offset)
+                    y1 = (h - new_h) // 2
+                    x1 = (w - new_w) // 2
                     
                     cropped = frame[y1:y1+new_h, x1:x1+new_w]
                     pil_img = PILImage.fromarray(cropped).resize((w, h), PILImage.Resampling.LANCZOS)
                     return np.array(pil_img)
 
                 if hasattr(img_clip, "transform"):
-                    animated_clip = img_clip.transform(documentary_camera_motion)
+                    animated_clip = img_clip.transform(reel_camera_motion)
                 else:
-                    animated_clip = img_clip.fl(documentary_camera_motion, keep_duration=True)
+                    animated_clip = img_clip.fl(reel_camera_motion, keep_duration=True)
 
                 animated_clip.write_videofile(
                     temp_video, 
@@ -180,14 +157,14 @@ if st.button("Generate Real Live-Action Video"):
                 )
                 
             except requests.exceptions.Timeout:
-                st.error("Server timeout ho gaya. Ek baar phir click karein.")
+                st.error("Server timeout ho gaya. Dobara Generate button dabayein.")
                 st.stop()
             except Exception as e:
-                st.error(f"Rendering error: {e}")
+                st.error(f"Video rendering error: {e}")
                 st.stop()
 
-        # Step 3: Final Video & Audio Sync
-        with st.spinner("Step 3/3: Final Live-Action Video aur Audio merge ho rahe hain..."):
+        # Step 3: Merge Audio & Video Perfectly
+        with st.spinner("Step 3/3: Voiceover aur Video ko sync karke final reel ban rahi hai..."):
             try:
                 video_clip = VideoFileClip(temp_video)
                 
@@ -206,7 +183,7 @@ if st.button("Generate Real Live-Action Video"):
                 else:
                     final_clip = video_clip
 
-                final_output_file = "final_live_action_video.mp4"
+                final_output_file = "instagram_reel_output.mp4"
                 final_clip.write_videofile(
                     final_output_file, 
                     codec="libx264", 
@@ -223,14 +200,14 @@ if st.button("Generate Real Live-Action Video"):
                 if audio_path and os.path.exists(audio_path):
                     os.remove(audio_path)
                 
-                st.success("Aapka Real Live-Action Video taiyar hai!")
+                st.success("Aapki Instagram Reel taiyar hai!")
                 st.video(final_output_file)
                 
                 with open(final_output_file, "rb") as file:
                     st.download_button(
-                        label="Download Live-Action Video (MP4)",
+                        label="Download Reel (MP4)",
                         data=file,
-                        file_name="live_action_video.mp4",
+                        file_name="my_ai_reel.mp4",
                         mime="video/mp4"
                     )
                     
