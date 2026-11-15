@@ -1,4 +1,5 @@
 streamlit
-gradio_client
-moviepy
+pillow
+numpy
+opencv-python-headless
 edge-tts
