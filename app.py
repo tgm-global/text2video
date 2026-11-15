@@ -166,3 +166,79 @@ if st.button("Generate 3D Animated Video"):
                     x1 = int(max_x_offset + (max_x_offset * 0.3 * np.cos(t * 1.2)))
                     
                     y1 = max(0, min(y1, h - new_h))
+                    x1 = max(0, min(x1, w - new_w))
+                    
+                    cropped = frame[y1:y1+new_h, x1:x1+new_w]
+                    pil_img = PILImage.fromarray(cropped).resize((w, h), PILImage.Resampling.LANCZOS)
+                    return np.array(pil_img)
+
+                if hasattr(img_clip, "transform"):
+                    animated_clip = img_clip.transform(cinematic_3d_camera)
+                else:
+                    animated_clip = img_clip.fl(cinematic_3d_camera, keep_duration=True)
+
+                animated_clip.write_videofile(
+                    temp_video, 
+                    fps=24, 
+                    codec="libx264", 
+                    audio=False,
+                    preset="medium"
+                )
+                
+            except requests.exceptions.Timeout:
+                st.error("Server par load zyada hone ki wajah se timeout ho gaya. Ek baar phir click karein.")
+                st.stop()
+            except Exception as e:
+                st.error(f"3D Rendering error: {e}")
+                st.stop()
+
+        # Step 3: Final Video & Audio Sync
+        with st.spinner("Step 3/3: Final 3D Video aur Audio merge ho rahe hain..."):
+            try:
+                video_clip = VideoFileClip(temp_video)
+                
+                if audio_path and os.path.exists(audio_path):
+                    audio_clip = AudioFileClip(audio_path)
+                    if audio_clip.duration > video_clip.duration:
+                        if hasattr(audio_clip, "subclipped"):
+                            audio_clip = audio_clip.subclipped(0, video_clip.duration)
+                        else:
+                            audio_clip = audio_clip.subclip(0, video_clip.duration)
+                            
+                    if hasattr(video_clip, "with_audio"):
+                        final_clip = video_clip.with_audio(audio_clip)
+                    else:
+                        final_clip = video_clip.set_audio(audio_clip)
+                else:
+                    final_clip = video_clip
+
+                final_output_file = "final_3d_animated_video.mp4"
+                final_clip.write_videofile(
+                    final_output_file, 
+                    codec="libx264", 
+                    audio_codec="aac", 
+                    fps=24,
+                    preset="medium"
+                )
+                
+                video_clip.close()
+                if os.path.exists(temp_video):
+                    os.remove(temp_video)
+                if os.path.exists(img_path):
+                    os.remove(img_path)
+                if audio_path and os.path.exists(audio_path):
+                    os.remove(audio_path)
+                
+                st.success("Aapka 3D Cinematic Animated Video taiyar hai!")
+                st.video(final_output_file)
+                
+                with open(final_output_file, "rb") as file:
+                    st.download_button(
+                        label="Download 3D Video (MP4)",
+                        data=file,
+                        file_name="3d_cinematic_video.mp4",
+                        mime="video/mp4"
+                    )
+                    
+            except Exception as e:
+                st.error(f"Merging error: {e}")
