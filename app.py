@@ -13,9 +13,9 @@ try:
 except ImportError:
     from moviepy.editor import VideoFileClip, AudioFileClip, ImageClip
 
-st.set_page_config(page_title="AI 3D Cinematic Animation & Voice Generator", layout="centered")
-st.title("AI 3D Cinematic Animation Generator")
-st.write("Text prompt se high-end 3D animated character aur natural neural voiceover wala video taiyar karein.")
+st.set_page_config(page_title="AI Real Live-Action Video & Voice Generator", layout="centered")
+st.title("AI Real Live-Action Video Generator")
+st.write("Text prompt se ekdam asli live-action footage aur natural neural voiceover taiyar karein.")
 
 # 1. Format Selection
 aspect_ratio = st.selectbox(
@@ -30,18 +30,18 @@ else:
 
 # 2. Character Selection
 gender_choice = st.selectbox(
-    "3D Character Kaun hoga?",
+    "Subject Kaun hai?",
     [
-        "Stylish Indian Young Woman (3D Animated Character)",
-        "Stylish Indian Young Man (3D Animated Character)",
-        "Custom Scene / Object (Koi character nahi, sirf scene)"
+        "Real Indian Young Woman (Live-Action)",
+        "Real Indian Young Man (Live-Action)",
+        "Real Location / Street / Nature Scene (No Person)"
     ]
 )
 
-# 3. Scene & Action Prompt
+# 3. Scene Prompt
 user_prompt = st.text_area(
-    "Scene aur action ka description likhein (Simple English):",
-    placeholder="Standing in a futuristic neon-lit Mumbai street at night, smiling, expressive eyes, hand gesture"
+    "Scene ka description likhein (Simple English):",
+    placeholder="Walking on a bustling Delhi street during evening time, natural expressions, candid shot"
 )
 
 # 4. Audio & Neural Voice Options
@@ -56,7 +56,7 @@ selected_voice_key = "hi-IN-SwaraNeural"
 if "Neural" in audio_choice:
     voice_text = st.text_input(
         "Voiceover ke liye text likhein:",
-        placeholder="Zindagi ke har mod par ek nayi kahani shuru hoti hai..."
+        placeholder="Zindagi ke safar mein aksar aisa hota hai..."
     )
     
     if "Man" in gender_choice:
@@ -77,38 +77,38 @@ if "Neural" in audio_choice:
 else:
     uploaded_audio = st.file_uploader("Apni Background .mp3 audio file upload karein", type=["mp3", "wav"])
 
-# Character Base Setup
+# Subject Prefix
 if "Woman" in gender_choice:
-    base_subject = "A charismatic 3D animated Indian young woman speaking expressively, "
+    base_subject = "A candid portrait of a real Indian young woman, "
 elif "Man" in gender_choice:
-    base_subject = "A charismatic 3D animated Indian young man speaking expressively, "
+    base_subject = "A candid portrait of a real Indian young man, "
 else:
-    base_subject = ""
+    base_subject = "A realistic raw video frame of "
 
-# High-End 3D Realistic Animation Prompt Boost
-ANIMATION_3D_BOOST = (
-    ", stunning 3D cinematic animation, Unreal Engine 5 render, Pixar and Disney high-end 3D movie style, "
-    "octane render, volumetric cinematic lighting, ray tracing, ultra-detailed textures, "
-    "expressive face and eyes, vibrant rich colors, shallow depth of field, 8k resolution, masterpiece"
+# Strict Real Live-Action Footage Prompt (No 3D, No Movie Style)
+LIVE_ACTION_BOOST = (
+    ", real live-action footage, documentary style, shot on 35mm lens, f/1.8 aperture, "
+    "natural human skin texture, pores, candid facial expressions, realistic ambient lighting, "
+    "real-world environment, zero cgi, zero animation, zero illustration, 8k resolution, photorealistic"
 )
 
 async def generate_edge_tts(text, voice, output_file):
     communicate = edge_tts.Communicate(text, voice)
     await communicate.save(output_file)
 
-if st.button("Generate 3D Animated Video"):
+if st.button("Generate Real Live-Action Video"):
     if not user_prompt.strip():
         st.warning("Pehle scene ka description likhein.")
     elif "Neural" in audio_choice and not voice_text.strip():
         st.warning("Voiceover ke liye kuch text likhein.")
     else:
-        final_prompt = f"{base_subject}{user_prompt.strip()}{ANIMATION_3D_BOOST}"
+        final_prompt = f"{base_subject}{user_prompt.strip()}{LIVE_ACTION_BOOST}"
         
-        # Step 1: Pehle Audio taiyar karte hain taaki video ki exact length pata chal sake
+        # Step 1: Audio Duration Check
         audio_path = None
-        target_duration = 6.0  # Default duration agar audio na ho
+        target_duration = 6.0
         
-        with st.spinner("Step 1/3: Neural Voiceover / Audio process ho raha hai..."):
+        with st.spinner("Step 1/3: Audio process ho rahi hai..."):
             try:
                 if "Neural" in audio_choice and voice_text.strip():
                     audio_path = "temp_neural_voice.mp3"
@@ -120,62 +120,56 @@ if st.button("Generate 3D Animated Video"):
                 
                 if audio_path and os.path.exists(audio_path):
                     temp_audio_clip = AudioFileClip(audio_path)
-                    # Video ko audio se 0.5 second lamba rakhenge taaki end mein achanak na kate
-                    target_duration = min(temp_audio_clip.duration + 0.5, 30.0) # Max 30 sec limit for fast cloud rendering
+                    target_duration = min(temp_audio_clip.duration + 0.5, 30.0)
                     temp_audio_clip.close()
             except Exception as e:
                 st.error(f"Audio processing error: {e}")
                 st.stop()
 
-        # Step 2: 3D Cinematic Visual Render
-        with st.spinner("Step 2/3: 3D Cinematic Character & Scene render ho raha hai..."):
+        # Step 2: Real Live-Action Visual Render
+        with st.spinner("Step 2/3: Real live-action photograph render ho rahi hai..."):
             try:
                 encoded_prompt = urllib.parse.quote(final_prompt)
-                img_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={vid_width}&height={vid_height}&model=flux&nologo=true"
+                img_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={vid_width}&height={vid_height}&model=flux-realism&nologo=true"
                 
                 response = requests.get(img_url, timeout=90)
                 if response.status_code == 200 and len(response.content) > 1000:
-                    img_path = "temp_3d_frame.jpg"
+                    img_path = "temp_live_frame.jpg"
                     with open(img_path, "wb") as f:
                         f.write(response.content)
                 else:
-                    st.error("3D visual generation fail ho gaya. Dobara try karein.")
+                    st.error("Visual generation fail ho gaya. Dobara try karein.")
                     st.stop()
                 
-                temp_video = "temp_raw_3d_video.mp4"
+                temp_video = "temp_raw_live_video.mp4"
                 
                 try:
                     img_clip = ImageClip(img_path, duration=target_duration)
                 except TypeError:
                     img_clip = ImageClip(img_path).set_duration(target_duration)
                 
-                # Smooth 3D Camera Pan & Breathing Zoom Effect
-                def cinematic_3d_camera(get_frame, t):
+                # Subtle documentary camera movement
+                def documentary_camera_motion(get_frame, t):
                     frame = get_frame(t)
                     h, w, _ = frame.shape
-                    # Smooth progressive zoom + gentle floating camera sway
                     progress = t / target_duration
-                    zoom_factor = 1.03 + (0.05 * progress) + (0.01 * np.sin(t * 2.5))
+                    zoom_factor = 1.01 + (0.02 * progress) # Very subtle camera push-in like real documentary
                     new_h, new_w = int(h / zoom_factor), int(w / zoom_factor)
                     
-                    # Gentle horizontal & vertical camera drift
                     max_y_offset = (h - new_h) // 2
                     max_x_offset = (w - new_w) // 2
                     
-                    y1 = int(max_y_offset + (max_y_offset * 0.3 * np.sin(t * 1.5)))
-                    x1 = int(max_x_offset + (max_x_offset * 0.3 * np.cos(t * 1.2)))
-                    
-                    y1 = max(0, min(y1, h - new_h))
-                    x1 = max(0, min(x1, w - new_w))
+                    y1 = int(max_y_offset)
+                    x1 = int(max_x_offset)
                     
                     cropped = frame[y1:y1+new_h, x1:x1+new_w]
                     pil_img = PILImage.fromarray(cropped).resize((w, h), PILImage.Resampling.LANCZOS)
                     return np.array(pil_img)
 
                 if hasattr(img_clip, "transform"):
-                    animated_clip = img_clip.transform(cinematic_3d_camera)
+                    animated_clip = img_clip.transform(documentary_camera_motion)
                 else:
-                    animated_clip = img_clip.fl(cinematic_3d_camera, keep_duration=True)
+                    animated_clip = img_clip.fl(documentary_camera_motion, keep_duration=True)
 
                 animated_clip.write_videofile(
                     temp_video, 
@@ -186,14 +180,14 @@ if st.button("Generate 3D Animated Video"):
                 )
                 
             except requests.exceptions.Timeout:
-                st.error("Server par load zyada hone ki wajah se timeout ho gaya. Ek baar phir click karein.")
+                st.error("Server timeout ho gaya. Ek baar phir click karein.")
                 st.stop()
             except Exception as e:
-                st.error(f"3D Rendering error: {e}")
+                st.error(f"Rendering error: {e}")
                 st.stop()
 
         # Step 3: Final Video & Audio Sync
-        with st.spinner("Step 3/3: Final 3D Video aur Audio merge ho rahe hain..."):
+        with st.spinner("Step 3/3: Final Live-Action Video aur Audio merge ho rahe hain..."):
             try:
                 video_clip = VideoFileClip(temp_video)
                 
@@ -212,7 +206,7 @@ if st.button("Generate 3D Animated Video"):
                 else:
                     final_clip = video_clip
 
-                final_output_file = "final_3d_animated_video.mp4"
+                final_output_file = "final_live_action_video.mp4"
                 final_clip.write_videofile(
                     final_output_file, 
                     codec="libx264", 
@@ -229,14 +223,14 @@ if st.button("Generate 3D Animated Video"):
                 if audio_path and os.path.exists(audio_path):
                     os.remove(audio_path)
                 
-                st.success("Aapka 3D Cinematic Animated Video taiyar hai!")
+                st.success("Aapka Real Live-Action Video taiyar hai!")
                 st.video(final_output_file)
                 
                 with open(final_output_file, "rb") as file:
                     st.download_button(
-                        label="Download 3D Video (MP4)",
+                        label="Download Live-Action Video (MP4)",
                         data=file,
-                        file_name="3d_cinematic_video.mp4",
+                        file_name="live_action_video.mp4",
                         mime="video/mp4"
                     )
                     
