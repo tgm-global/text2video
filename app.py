@@ -1,22 +1,17 @@
 import streamlit as st
 import requests
-import shutil
 import os
 import asyncio
 import edge_tts
+import urllib.parse
 from PIL import Image as PILImage
 import numpy as np
 
-# Safe MoviePy Import & Compatibility Check
+# Safe MoviePy Import (v1 & v2 compatible)
 try:
-    from moviepy import VideoFileClip, AudioFileClip, ImageClip, CompositeVideoClip
-    MOVIEPY_V2 = True
+    from moviepy import VideoFileClip, AudioFileClip, ImageClip
 except ImportError:
-    try:
-        from moviepy.editor import VideoFileClip, AudioFileClip, ImageClip, CompositeVideoClip
-        MOVIEPY_V2 = False
-    except ImportError:
-        pass
+    from moviepy.editor import VideoFileClip, AudioFileClip, ImageClip
 
 st.set_page_config(page_title="AI Realistic Model Video & Neural Voice Generator", layout="centered")
 st.title("AI Real-Life Model & Voice Generator")
@@ -36,7 +31,7 @@ else:
 # 2. Text Prompt for Realistic Model
 user_prompt = st.text_area(
     "Video ka description likhein (Simple English):",
-    placeholder="A stylish professional model smiling and looking at the camera, cinematic lighting"
+    placeholder="A stylish professional Indian model smiling and looking at the camera, natural outdoor lighting"
 )
 
 # 3. Audio & Neural Voice Options
@@ -46,21 +41,21 @@ audio_choice = st.radio(
 )
 
 voice_text = ""
-selected_voice_key = "en-US-AriaNeural (Female - Professional & Natural)"
+selected_voice_key = "en-IN-NeerjaNeural"
 
 if "Neural" in audio_choice:
     voice_text = st.text_input(
         "Voiceover ke liye text likhein:",
-        placeholder="Discover the newest collection today, click the link below!"
+        placeholder="Raat ka yeh silsila bhi kya khubsurat hai..."
     )
     
     voice_options = {
-        "en-US-AriaNeural (Female - Professional & Natural)": "en-US-AriaNeural",
-        "en-US-GuyNeural (Male - Deep & Clear)": "en-US-GuyNeural",
         "en-IN-NeerjaNeural (Indian Female - Warm & Realistic)": "en-IN-NeerjaNeural",
         "en-IN-PrabhatNeural (Indian Male - Authoritative & Clear)": "en-IN-PrabhatNeural",
-        "en-GB-SoniaNeural (British Female - Soft & Elegant)": "en-GB-SoniaNeural",
-        "en-GB-RyanNeural (British Male - Young & Energetic)": "en-GB-RyanNeural"
+        "hi-IN-SwaraNeural (Hindi Female - Natural & Expressive)": "hi-IN-SwaraNeural",
+        "hi-IN-MadhurNeural (Hindi Male - Deep & Natural)": "hi-IN-MadhurNeural",
+        "en-US-AriaNeural (US Female - Professional & Natural)": "en-US-AriaNeural",
+        "en-US-GuyNeural (US Male - Deep & Clear)": "en-US-GuyNeural"
     }
     
     chosen_label = st.selectbox("Ultra-Realistic Voice Model Chunein:", list(voice_options.keys()))
@@ -69,9 +64,9 @@ else:
     uploaded_audio = st.file_uploader("Apni Background .mp3 audio file upload karein", type=["mp3", "wav"])
 
 REALISM_BOOST = (
-    ", photorealistic, real life raw footage, shot on 35mm lens, f/1.8 aperture, "
-    "natural human skin texture, pores, realistic lighting, highly detailed, "
-    "8k resolution, live action film, professional photography, no cartoon, no cgi"
+    ", raw candid DSLR photo, shot on 35mm lens, f/1.8, "
+    "natural human skin texture, visible pores, realistic lighting, "
+    "live action photography, ultra detailed, no cgi, no 3d render, no illustration"
 )
 
 async def generate_edge_tts(text, voice, output_file):
@@ -84,25 +79,24 @@ if st.button("Generate Realistic Video & Audio"):
     else:
         final_prompt = user_prompt.strip() + REALISM_BOOST
         
-        with st.spinner("Step 1/2: Photorealistic model image generate ho rahi hai..."):
+        with st.spinner("Step 1/2: Photorealistic image ban rahi hai (40-60 seconds lag sakte hain)..."):
             try:
-                import urllib.parse
                 encoded_prompt = urllib.parse.quote(final_prompt)
-                img_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={vid_width}&height={vid_height}&nologo=true&seed=42"
+                img_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={vid_width}&height={vid_height}&model=flux&nologo=true"
                 
-                response = requests.get(img_url, timeout=30)
-                if response.status_code == 200:
+                # Timeout 90 seconds kar diya hai taaki server response ka pura wait kare
+                response = requests.get(img_url, timeout=90)
+                if response.status_code == 200 and len(response.content) > 1000:
                     img_path = "temp_model_image.jpg"
                     with open(img_path, "wb") as f:
                         f.write(response.content)
                 else:
-                    st.error("Image generation failed. Please try again.")
+                    st.error(f"Server se image nahi mil paayi (Status: {response.status_code}). Ek baar phir try karein.")
                     st.stop()
                 
                 temp_video = "temp_raw_video.mp4"
                 duration_sec = 5
                 
-                # Compatible ImageClip initialization for both MoviePy v1 and v2
                 try:
                     img_clip = ImageClip(img_path, duration=duration_sec)
                 except TypeError:
@@ -111,7 +105,7 @@ if st.button("Generate Realistic Video & Audio"):
                 def zoom_effect(get_frame, t):
                     frame = get_frame(t)
                     h, w, _ = frame.shape
-                    zoom_factor = 1.0 + (0.03 * (t / duration_sec))
+                    zoom_factor = 1.0 + (0.04 * (t / duration_sec))
                     new_h, new_w = int(h / zoom_factor), int(w / zoom_factor)
                     y1, x1 = (h - new_h) // 2, (w - new_w) // 2
                     cropped = frame[y1:y1+new_h, x1:x1+new_w]
@@ -119,7 +113,12 @@ if st.button("Generate Realistic Video & Audio"):
                     pil_img = PILImage.fromarray(cropped).resize((w, h), PILImage.Resampling.LANCZOS)
                     return np.array(pil_img)
 
-                zoomed_clip = img_clip.fl(zoom_effect, keep_duration=True)
+                # MoviePy v2 (.transform) aur v1 (.fl) dono ke liye safe handling
+                if hasattr(img_clip, "transform"):
+                    zoomed_clip = img_clip.transform(zoom_effect)
+                else:
+                    zoomed_clip = img_clip.fl(zoom_effect, keep_duration=True)
+
                 zoomed_clip.write_videofile(
                     temp_video, 
                     fps=24, 
@@ -128,6 +127,9 @@ if st.button("Generate Realistic Video & Audio"):
                     preset="medium"
                 )
                 
+            except requests.exceptions.Timeout:
+                st.error("Server busy hone ki wajah se time out ho gaya. Dobara Generate button dabayein.")
+                st.stop()
             except Exception as e:
                 st.error(f"Video rendering error: {e}")
                 st.stop()
