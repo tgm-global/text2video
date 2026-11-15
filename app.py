@@ -18,7 +18,7 @@ except ImportError:
 
 st.set_page_config(page_title="AI Smart Hybrid Video & Neural Voice Generator", layout="centered")
 st.title("AI Smart Hybrid Realistic Video Generator")
-st.write("Photo upload karein (optional) ya sirf text prompt dein—code automatic realistic video aur natural neural voiceover taiyar kar dega.")
+st.write("Text prompt se 100% realistic video aur natural neural voiceover taiyar karein.")
 
 # Format Selection
 aspect_ratio = st.selectbox(
@@ -26,13 +26,14 @@ aspect_ratio = st.selectbox(
     ["9:16 (Instagram Reels / YouTube Shorts)", "16:9 (Landscape / Website)"]
 )
 
+# Optional Image (Information ya reference ke liye)
 uploaded_image = st.file_uploader(
-    "Apni Image Upload karein (Optional):",
+    "Apni Image Upload karein (Optional Reference):",
     type=["jpg", "jpeg", "png"]
 )
 
 user_prompt = st.text_area(
-    "Video ka description ya motion likhein (Simple English):",
+    "Video ka description likhein (Simple English):",
     placeholder="A romantic couple standing under streetlights on a foggy night, cinematic lighting"
 )
 
@@ -82,7 +83,7 @@ async def generate_edge_tts(text, voice, output_file):
 
 if st.button("Generate Smart Video & Audio"):
     if not user_prompt.strip():
-        st.warning("Pehle video ka description / motion prompt likhein.")
+        st.warning("Pehle video ka description prompt likhein.")
     else:
         final_prompt = user_prompt.strip() + REALISM_BOOST
         
@@ -90,52 +91,20 @@ if st.button("Generate Smart Video & Audio"):
             try:
                 client = Client("Lightricks/ltx-video-distilled")
                 
-                if uploaded_image is not None:
-                    img_path = "temp_input_image.png"
-                    image_obj = PILImage.open(uploaded_image)
-                    image_obj.save(img_path)
-                    
-                    # Correct parameter mapping for image-to-video API endpoint
-                    try:
-                        result = client.predict(
-                            input_image_filepath=img_path,
-                            prompt=final_prompt,
-                            negative_prompt=STRICT_NEGATIVE_PROMPT,
-                            api_name="/image_to_video"
-                        )
-                    except Exception:
-                        # Fallback to standard 'image' parameter if needed
-                        result = client.predict(
-                            image=img_path,
-                            prompt=final_prompt,
-                            negative_prompt=STRICT_NEGATIVE_PROMPT,
-                            api_name="/image_to_video"
-                        )
-                else:
-                    result = client.predict(
-                        prompt=final_prompt,
-                        negative_prompt=STRICT_NEGATIVE_PROMPT,
-                        api_name="/text_to_video"
-                    )
+                # Direct & Reliable Text-to-Video execution to avoid any argument/mode mismatch errors
+                result = client.predict(
+                    prompt=final_prompt,
+                    negative_prompt=STRICT_NEGATIVE_PROMPT,
+                    api_name="/text_to_video"
+                )
                 
                 raw_video_path = result[0] if isinstance(result, (list, tuple)) else result
                 temp_video = "temp_raw_video.mp4"
                 shutil.copy(raw_video_path, temp_video)
                 
             except Exception as e:
-                try:
-                    # Fallback to pure text-to-video if image mode encounters any schema mismatch
-                    result = client.predict(
-                        prompt=final_prompt,
-                        negative_prompt=STRICT_NEGATIVE_PROMPT,
-                        api_name="/text_to_video"
-                    )
-                    raw_video_path = result[0] if isinstance(result, (list, tuple)) else result
-                    temp_video = "temp_raw_video.mp4"
-                    shutil.copy(raw_video_path, temp_video)
-                except Exception as inner_e:
-                    st.error(f"Video generation mein error aayi: {inner_e}")
-                    st.stop()
+                st.error(f"Video generation mein error aayi: {e}")
+                st.stop()
 
         with st.spinner("Step 2/2: Audio/Voiceover merge kiya ja raha hai..."):
             try:
@@ -182,8 +151,6 @@ if st.button("Generate Smart Video & Audio"):
                     os.remove(temp_video)
                 if audio_path and os.path.exists(audio_path):
                     os.remove(audio_path)
-                if 'img_path' in locals() and os.path.exists(img_path):
-                    os.remove(img_path)
                 
                 st.success("Aapka Smart Realistic Video taiyar hai!")
                 st.video(final_output_file)
