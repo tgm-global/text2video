@@ -1,216 +1,442 @@
+
 import streamlit as st
-import requests
 import os
+import cv2
+import numpy as np
 import asyncio
 import edge_tts
-import urllib.parse
-import time
-import re
+import subprocess
+import tempfile
+import textwrap
+import math
 
-# Safe MoviePy Import (v1 & v2 compatible)
-try:
-    from moviepy import VideoFileClip, AudioFileClip, ImageClip, concatenate_videoclips
-except ImportError:
-    try:
-        from moviepy.editor import VideoFileClip, AudioFileClip, ImageClip, concatenate_videoclips
-    except ImportError:
-        from moviepy.video.io.VideoFileClip import VideoFileClip
-        from moviepy.audio.io.AudioFileClip import AudioFileClip
-        from moviepy.video.io.ImageClip import ImageClip
-        from moviepy.video.compositing.concatenate import concatenate_videoclips
+from PIL import Image, ImageDraw, ImageFont
 
-st.set_page_config(page_title="Animated Story Reel Generator (Word-by-Word Scene Changer)", layout="centered")
-st.title("Animated Story Reel Generator")
-st.write("Story daalein, aur tool har sentence ke sath automatic expressions aur scenes wali animated images change karte hue reel banayega.")
-
-# 1. Format Selection (Reels 9:16)
-aspect_ratio = st.selectbox(
-    "Video Format Chunein:",
-    ["9:16 (Instagram Reels / YouTube Shorts)", "16:9 (Landscape / Website)"]
+st.set_page_config(
+    page_title="AI Reels Studio",
+    page_icon="🎬",
+    layout="centered"
 )
 
-if "9:16" in aspect_ratio:
-    vid_width, vid_height = 576, 1024
-else:
-    vid_width, vid_height = 1024, 576
-
-# 2. Story / Script Input
-story_script = st.text_area(
-    "Apni poori Story / Script yahan likhein:",
-    value="Ek ladka roz ek ladki ko park mein dekhta tha. Ladki jab bhi muskurati, ladke ka din ban jaata. Ek din himmat karke ladke ne ladki se baat ki. Dheere-dheere dono dost bane aur phir ek doosre se pyaar karne lage. Dono saath ghoomte, coffee peete aur apne future ke sapne dekhte. Ek din ladki ko doosre shehar jaana pada. Jaate waqt usne ladke se kaha, 'Kya tum mera intezaar karoge?' Ladke ne muskurakar kaha, 'Jab mohabbat sachchi ho, toh intezaar bhi khoobsurat lagta hai.' Kuch mahino baad ladki wapas aayi. Ladka aaj bhi usi park mein uska intezaar kar raha tha. Dono ek doosre ko dekhkar muskuraaye aur gale lag gaye.",
-    height=150
-)
-
-# 3. Voice Model Selection
-voice_options = {
-    "hi-IN-MadhurNeural (Hindi Male - Deep & Emotional)": "hi-IN-MadhurNeural",
-    "hi-IN-SwaraNeural (Hindi Female - Warm & Expressive)": "hi-IN-SwaraNeural",
-    "en-IN-PrabhatNeural (Indian Male - Clear)": "en-IN-PrabhatNeural",
-    "en-IN-NeerjaNeural (Indian Female - Clear)": "en-IN-NeerjaNeural"
+st.markdown("""
+<style>
+.stApp {
+    background: linear-gradient(135deg,#101426,#191d35);
+    color: white;
 }
+h1 {
+    text-align: center;
+    color: #ffffff;
+}
+.stButton button {
+    background: #7c3aed;
+    color: white;
+    border-radius: 12px;
+    width: 100%;
+    height: 50px;
+    font-weight: bold;
+}
+</style>
+""", unsafe_allow_html=True)
 
-chosen_label = st.selectbox("Voiceover ke liye Narrator Chunein:", list(voice_options.keys()))
-selected_voice_key = voice_options[chosen_label]
+st.title("🎬 AI REELS STUDIO")
+st.caption("Create cinematic Instagram Reels from your story")
 
-# Cartoon / 2D Animated Illustration Style Booster
-CARTOON_ANIMATION_BOOST = (
-    ", vibrant 2D animated vector art style, cute modern cartoon illustration, "
-    "expressive character facial expressions, colorful and emotional storytelling aesthetic, "
-    "clean lines, high quality digital artwork, storybook illustration"
+st.divider()
+
+story = st.text_area(
+    "✍️ Apni story likhein",
+    height=180,
+    placeholder="Ek gareeb ladke ki kahani..."
 )
 
-async def generate_edge_tts(text, voice, output_file):
-    communicate = edge_tts.Communicate(text, voice)
-    await communicate.save(output_file)
+st.subheader("🎞️ Upload Cinematic Scenes")
 
-if st.button("Generate Dynamic Animated Reel"):
-    if not story_script.strip():
-        st.warning("Kripya story script zaroor likhein.")
+images = st.file_uploader(
+    "Scene images upload karein",
+    type=["png", "jpg", "jpeg"],
+    accept_multiple_files=True
+)
+
+voice = st.selectbox(
+    "🎙️ Hindi AI Voice",
+    [
+        "hi-IN-SwaraNeural",
+        "hi-IN-MadhurNeural"
+    ]
+)
+
+quality = st.selectbox(
+    "Video Quality",
+    ["720p HD", "1080p Full HD"]
+)
+
+duration_limit = st.slider(
+    "Maximum Reel Duration (seconds)",
+    15, 60, 30
+)
+
+music = st.file_uploader(
+    "🎵 Background Music (Optional)",
+    type=["mp3", "wav"]
+)
+
+
+def split_story(text):
+    text = text.replace("\r", "")
+    paragraphs = [
+        p.strip() for p in text.split("\n")
+        if p.strip()
+    ]
+
+    if len(paragraphs) > 1:
+        return paragraphs
+
+    sentences = []
+    for part in text.replace("!", "।").replace("?", "।").split("।"):
+        if part.strip():
+            sentences.append(part.strip())
+
+    return sentences
+
+
+def get_font(size):
+    fonts = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSans.ttf"
+    ]
+
+    for path in fonts:
+        if os.path.exists(path):
+            try:
+                return ImageFont.truetype(path, size)
+            except Exception:
+                pass
+
+    return ImageFont.load_default()
+
+
+async def generate_voice(text, path, voice_name):
+    tts = edge_tts.Communicate(
+        text=text,
+        voice=voice_name,
+        rate="+0%",
+        volume="+0%"
+    )
+    await tts.save(path)
+
+
+def make_cinematic_frame(image, width, height, progress, caption):
+
+    image = image.convert("RGB")
+
+    ratio = max(
+        width / image.width,
+        height / image.height
+    )
+
+    nw = int(image.width * ratio)
+    nh = int(image.height * ratio)
+
+    image = image.resize((nw, nh))
+
+    zoom = 1 + (0.12 * progress)
+
+    crop_w = int(width / zoom)
+    crop_h = int(height / zoom)
+
+    max_x = max(0, nw - crop_w)
+    max_y = max(0, nh - crop_h)
+
+    x = int(max_x * progress)
+    y = int(max_y * progress)
+
+    image = image.crop((
+        x, y, x + crop_w, y + crop_h
+    ))
+
+    image = image.resize((width, height))
+
+    image = np.array(image).astype(np.float32)
+
+    # Cinematic contrast
+    image = (image - 110) * 1.12 + 110
+    image = np.clip(image, 0, 255).astype(np.uint8)
+
+    pil = Image.fromarray(image).convert("RGBA")
+
+    overlay = Image.new(
+        "RGBA",
+        (width, height),
+        (0, 0, 0, 0)
+    )
+
+    draw = ImageDraw.Draw(overlay)
+
+    draw.rectangle(
+        (0, int(height * 0.72), width, height),
+        fill=(0, 0, 0, 175)
+    )
+
+    pil = Image.alpha_composite(pil, overlay)
+
+    draw = ImageDraw.Draw(pil)
+
+    font = get_font(36 if width >= 1080 else 25)
+
+    lines = textwrap.wrap(caption, width=30)
+
+    y_text = int(height * 0.78)
+
+    for line in lines[:4]:
+
+        bbox = draw.textbbox(
+            (0, 0), line, font=font
+        )
+
+        tw = bbox[2] - bbox[0]
+
+        draw.text(
+            ((width - tw) // 2, y_text),
+            line,
+            font=font,
+            fill="white",
+            stroke_width=2,
+            stroke_fill="black"
+        )
+
+        y_text += 48 if width >= 1080 else 34
+
+    return cv2.cvtColor(
+        np.array(pil.convert("RGB")),
+        cv2.COLOR_RGB2BGR
+    )
+
+
+def create_reel(
+    images,
+    scenes,
+    audio,
+    output,
+    width,
+    height,
+    max_duration,
+    music_path=None
+):
+
+    probe = subprocess.run(
+        [
+            "ffprobe",
+            "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            audio
+        ],
+        capture_output=True,
+        text=True,
+        check=True
+    )
+
+    audio_duration = float(probe.stdout.strip())
+
+    if audio_duration > max_duration:
+        raise ValueError(
+            "Voiceover duration exceeds selected maximum. "
+            "Please shorten your story."
+        )
+
+    fps = 20
+    scene_duration = audio_duration / len(scenes)
+
+    silent = output.replace(".mp4", "_silent.mp4")
+
+    writer = cv2.VideoWriter(
+        silent,
+        cv2.VideoWriter_fourcc(*"mp4v"),
+        fps,
+        (width, height)
+    )
+
+    if not writer.isOpened():
+        raise RuntimeError("Video writer could not start.")
+
+    for i, caption in enumerate(scenes):
+
+        count = max(
+            1,
+            int(scene_duration * fps)
+        )
+
+        image = images[i % len(images)]
+
+        for frame_no in range(count):
+
+            progress = frame_no / max(1, count - 1)
+
+            frame = make_cinematic_frame(
+                image,
+                width,
+                height,
+                progress,
+                caption
+            )
+
+            writer.write(frame)
+
+    writer.release()
+
+    command = [
+        "ffmpeg",
+        "-y",
+        "-i", silent,
+        "-i", audio
+    ]
+
+    if music_path:
+
+        command += [
+            "-stream_loop", "-1",
+            "-i", music_path,
+            "-filter_complex",
+            "[2:a]volume=0.12[m];"
+            "[1:a][m]amix=inputs=2:duration=first[a]",
+            "-map", "0:v",
+            "-map", "[a]"
+        ]
+
     else:
-        # Step 1: Split story into sentences using punctuation marks (. ! ?)
-        sentences = [s.strip() for s in re.split(r'[.!?]+', story_script) if s.strip()]
-        if not sentences:
-            sentences = [story_script]
-            
-        st.info(f"Aapki story ko {len(sentences)} alag-alag animated scenes mein divide kiya gaya hai.")
 
-        # Step 2: Generate full voiceover audio first to get exact duration
-        audio_path = "temp_full_story_audio.mp3"
-        with st.spinner("Step 1/3: Neural voiceover generate ho raha hai..."):
-            try:
-                asyncio.run(generate_edge_tts(story_script, selected_voice_key, audio_path))
-                if not os.path.exists(audio_path):
-                    st.error("Voice generation fail ho gaya.")
-                    st.stop()
-                
-                audio_clip = AudioFileClip(audio_path)
-                total_duration = audio_clip.duration
-            except Exception as e:
-                st.error(f"Voice error: {e}")
-                st.stop()
+        command += [
+            "-map", "0:v",
+            "-map", "1:a"
+        ]
 
-        # Step 3: Generate matching animated image for each sentence sequentially
-        scene_image_paths = []
-        progress_text = st.empty()
-        progress_bar = st.progress(0)
-        
-        total_sentences = len(sentences)
-        
-        for i, sentence in enumerate(sentences):
-            progress_text.text(f"Step 2/3: Scene {i+1} of {total_sentences} ki animated image ban rahi hai...")
-            progress_bar.progress(int(((i + 1) / total_sentences) * 100))
-            
-            # Combine sentence text with cartoon animation booster
-            prompt_text = f"An illustrated scene showing: {sentence} {CARTOON_ANIMATION_BOOST}"
-            encoded_prompt = urllib.parse.quote(prompt_text)
-            img_path = f"temp_scene_{i}.jpg"
-            success = False
-            
-            # Try endpoints with safe fallbacks
-            urls = [
-                f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={vid_width}&height={vid_height}&model=flux&nologo=true&seed={300+i}",
-                f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={vid_width}&height={vid_height}&nologo=true&seed={400+i}"
-            ]
-            
-            for url in urls:
-                try:
-                    res = requests.get(url, timeout=35)
-                    if res.status_code == 200 and len(res.content) > 1500:
-                        with open(img_path, "wb") as f:
-                            f.write(res.content)
-                        scene_image_paths.append(img_path)
-                        success = True
-                        break
-                except Exception:
-                    time.sleep(1)
-                    continue
-            
-            if not success:
-                # Fallback cartoon placeholder if a sentence image fails
-                try:
-                    fallback_url = f"https://image.pollinations.ai/prompt/cute%20cartoon%20romantic%20story%20illustration?width={vid_width}&height={vid_height}&nologo=true&seed={500+i}"
-                    res = requests.get(fallback_url, timeout=20)
-                    if res.status_code == 200:
-                        with open(img_path, "wb") as f:
-                            f.write(res.content)
-                        scene_image_paths.append(img_path)
-                except Exception:
-                    pass
-            
-            time.sleep(1) # Delay to keep server stable
+    command += [
+        "-c:v", "libx264",
+        "-preset", "ultrafast",
+        "-crf", "26",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "aac",
+        "-shortest",
+        output
+    ]
 
-        progress_text.empty()
-        progress_bar.empty()
+    try:
+        subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+    finally:
+        if os.path.exists(silent):
+            os.remove(silent)
 
-        if len(scene_image_paths) == 0:
-            st.error("Animated visuals generate nahi ho paaye. Dobara koshish karein.")
-            st.stop()
 
-        # Step 4: Calculate exact duration per sentence/scene and build video clips
-        with st.spinner("Step 3/3: Har sentence ke hisaab se scenes aur audio ko sync kiya ja raha hai..."):
-            try:
-                # Distribute audio duration proportionally based on character length of each sentence
-                total_chars = sum(len(s) for s in sentences)
-                clip_files = []
-                
-                for i, img_p in enumerate(scene_image_paths):
-                    # Proportional duration allocation per sentence
-                    sentence_weight = len(sentences[i]) / max(total_chars, 1)
-                    scene_duration = max(total_duration * sentence_weight, 2.0) # Minimum 2 seconds per scene
-                    
-                    out_clip_name = f"temp_clip_{i}.mp4"
-                    try:
-                        img_clip = ImageClip(img_p, duration=scene_duration)
-                    except TypeError:
-                        img_clip = ImageClip(img_p).set_duration(scene_duration)
-                        
-                    img_clip.write_videofile(
-                        out_clip_name, 
-                        fps=24, 
-                        codec="libx264", 
-                        audio=False,
-                        preset="ultrafast"
-                    )
-                    img_clip.close()
-                    clip_files.append(out_clip_name)
-                
-                loaded_clips = [VideoFileClip(c) for c in clip_files]
-                final_video = concatenate_videoclips(loaded_clips, method="compose")
-                
-                # Attach audio
-                if hasattr(final_video, "with_audio"):
-                    final_video_with_audio = final_video.with_audio(audio_clip)
-                else:
-                    final_video_with_audio = final_video.set_audio(audio_clip)
-                
-                final_output_file = "animated_story_reel.mp4"
-                final_video_with_audio.write_videofile(
-                    final_output_file, 
-                    codec="libx264", 
-                    audio_codec="aac", 
-                    fps=24,
-                    preset="medium"
+st.divider()
+
+if st.button("🚀 GENERATE MY AI REEL"):
+
+    if not story.strip():
+        st.error("Please enter your story.")
+        st.stop()
+
+    if not images:
+        st.error("Please upload scene images.")
+        st.stop()
+
+    if len(story) > 4000:
+        st.error("Story should be under 4000 characters.")
+        st.stop()
+
+    scenes = split_story(story)
+
+    if len(scenes) > 15:
+        st.error("Maximum 15 scenes allowed.")
+        st.stop()
+
+    with tempfile.TemporaryDirectory() as temp:
+
+        audio_path = os.path.join(temp, "voice.mp3")
+        output_path = os.path.join(temp, "final_reel.mp4")
+
+        try:
+
+            progress = st.progress(0)
+            status = st.empty()
+
+            status.write("🎙️ Generating Hindi voiceover...")
+
+            asyncio.run(
+                generate_voice(
+                    story,
+                    audio_path,
+                    voice
                 )
-                
-                # Cleanup temporary files
-                audio_clip.close()
-                final_video.close()
-                for c in clip_files:
-                    if os.path.exists(c): os.remove(c)
-                for img_p in scene_image_paths:
-                    if os.path.exists(img_p): os.remove(img_p)
-                if os.path.exists(audio_path): os.remove(audio_path)
-                
-                st.success("Aapki Dynamic Animated Story Reel taiyar hai!")
-                st.video(final_output_file)
-                
-                with open(final_output_file, "rb") as file:
-                    st.download_button(
-                        label="Download Animated Reel (MP4)",
-                        data=file,
-                        file_name="animated_story_reel.mp4",
-                        mime="video/mp4"
-                    )
-                    
-            except Exception as e:
-                st.error(f"Video compilation error: {e}")
+            )
+
+            progress.progress(25)
+
+            status.write("🎬 Loading cinematic images...")
+
+            scene_images = []
+
+            for file in images:
+
+                img = Image.open(file).convert("RGB")
+                scene_images.append(img)
+
+            width, height = (
+                (720, 1280)
+                if quality == "720p HD"
+                else (1080, 1920)
+            )
+
+            music_path = None
+
+            if music:
+
+                music_path = os.path.join(
+                    temp, "music.mp3"
+                )
+
+                with open(music_path, "wb") as f:
+                    f.write(music.getvalue())
+
+            progress.progress(40)
+
+            status.write("🎥 Rendering cinematic video...")
+
+            create_reel(
+                scene_images,
+                scenes,
+                audio_path,
+                output_path,
+                width,
+                height,
+                duration_limit,
+                music_path
+            )
+
+            progress.progress(100)
+
+            status.success("🎉 Your Reel is ready!")
+
+            with open(output_path, "rb") as f:
+                video = f.read()
+
+            st.video(video)
+
+            st.download_button(
+                "⬇️ DOWNLOAD YOUR REEL",
+                data=video,
+                file_name="AI_Reel.mp4",
+                mime="video/mp4"
+            )
+
+        except Exception as e:
+
+            st.error(
+                f"Generation error: {str(e)}"
+            )
