@@ -20,7 +20,7 @@ st.set_page_config(page_title="AI Smart Hybrid Video & Neural Voice Generator", 
 st.title("AI Smart Hybrid Realistic Video Generator")
 st.write("Photo upload karein (optional) ya sirf text prompt dein—code automatic realistic video aur natural neural voiceover taiyar kar dega.")
 
-# Format Selection (UI ke liye, prompt ko enrich karne me use hoga)
+# Format Selection
 aspect_ratio = st.selectbox(
     "Video Format Chunein:",
     ["9:16 (Instagram Reels / YouTube Shorts)", "16:9 (Landscape / Website)"]
@@ -102,11 +102,10 @@ if st.button("Generate Smart Video & Audio"):
                         api_name="/image_to_video"
                     )
                 else:
-                    # Height/Width hata diya gaya hai taaki invalid argument error na aaye
+                    # Sirf essential parameters rakhe gaye hain taaki koi invalid argument error na aaye
                     result = client.predict(
                         prompt=final_prompt,
                         negative_prompt=STRICT_NEGATIVE_PROMPT,
-                        num_frames=49,
                         api_name="/text_to_video"
                     )
                 
@@ -119,7 +118,6 @@ if st.button("Generate Smart Video & Audio"):
                     result = client.predict(
                         prompt=final_prompt,
                         negative_prompt=STRICT_NEGATIVE_PROMPT,
-                        num_frames=49,
                         api_name="/text_to_video"
                     )
                     raw_video_path = result[0] if isinstance(result, (list, tuple)) else result
