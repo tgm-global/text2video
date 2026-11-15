@@ -57,9 +57,8 @@ else:
         "en-IN-PrabhatNeural (Indian Male - Authoritative & Clear)": "en-IN-PrabhatNeural"
     }
 
-selected_voice_key = list(voice_options.values()[0]) if isinstance(voice_options, dict) else "hi-IN-SwaraNeural"
 chosen_label = st.selectbox("Neural Voice Model Chunein:", list(voice_options.keys()))
-selected_voice_key = voice_options[chosen_label]
+selected_voice_key = voice_options[chosen_label] # Fixed dictionary access
 
 # Strict Real Live-Action Booster (To avoid cartoon/animation)
 LIVE_ACTION_BOOST = (
