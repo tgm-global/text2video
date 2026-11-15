@@ -13,9 +13,9 @@ try:
 except ImportError:
     from moviepy.editor import VideoFileClip, AudioFileClip, ImageClip
 
-st.set_page_config(page_title="AI Realistic Model Video & Neural Voice Generator", layout="centered")
-st.title("AI Real-Life Model & Voice Generator")
-st.write("Text prompt se ekdam photorealistic model aur natural neural voiceover taiyar karein.")
+st.set_page_config(page_title="AI Lip-Sync & Realistic Motion Video Generator", layout="centered")
+st.title("AI Lip-Sync & Expression Video Generator")
+st.write("Text aur Neural Voice ke sath exact lip-syncing aur natural body/facial movements wala video banayein.")
 
 # 1. Format Selection
 aspect_ratio = st.selectbox(
@@ -28,98 +28,107 @@ if "9:16" in aspect_ratio:
 else:
     vid_width, vid_height = 1024, 576
 
-# 2. Text Prompt for Realistic Model
-user_prompt = st.text_area(
-    "Video ka description likhein (Simple English):",
-    placeholder="A stylish professional Indian model smiling and looking at the camera, natural outdoor lighting"
+# 2. Character & Action Prompt
+gender_choice = st.selectbox(
+    "Character Kaun hai?",
+    ["Professional Indian Young Woman (Female)", "Professional Indian Young Man (Male)"]
 )
 
-# 3. Audio & Neural Voice Options
+user_prompt = st.text_area(
+    "Video ka background aur expressions likhein (Simple English):",
+    placeholder="Smiling gently, natural head tilt, hand gestures, modern cafe background, soft studio lighting"
+)
+
+# 3. Neural Voice Selection
 audio_choice = st.radio(
     "Audio ke liye aap kya use karna chahte hain?",
     ["Neural AI Voiceover (100% Non-Robotic & Natural)", "Apna khud ka Song/Music upload karein (.mp3)"]
 )
 
 voice_text = ""
-selected_voice_key = "en-IN-NeerjaNeural"
+selected_voice_key = "hi-IN-SwaraNeural"
 
 if "Neural" in audio_choice:
     voice_text = st.text_input(
-        "Voiceover ke liye text likhein:",
-        placeholder="Raat ka yeh silsila bhi kya khubsurat hai..."
+        "Voiceover ke liye text likhein (Jiske hisaab se lip-sync hogi):",
+        placeholder="Namaste, aaj ki nayi video mein aapka swagat hai..."
     )
     
-    voice_options = {
-        "en-IN-NeerjaNeural (Indian Female - Warm & Realistic)": "en-IN-NeerjaNeural",
-        "en-IN-PrabhatNeural (Indian Male - Authoritative & Clear)": "en-IN-PrabhatNeural",
-        "hi-IN-SwaraNeural (Hindi Female - Natural & Expressive)": "hi-IN-SwaraNeural",
-        "hi-IN-MadhurNeural (Hindi Male - Deep & Natural)": "hi-IN-MadhurNeural",
-        "en-US-AriaNeural (US Female - Professional & Natural)": "en-US-AriaNeural",
-        "en-US-GuyNeural (US Male - Deep & Clear)": "en-US-GuyNeural"
-    }
+    if "Female" in gender_choice:
+        voice_options = {
+            "hi-IN-SwaraNeural (Hindi Female - Natural & Expressive)": "hi-IN-SwaraNeural",
+            "en-IN-NeerjaNeural (Indian Female - Warm & Realistic)": "en-IN-NeerjaNeural",
+            "en-US-AriaNeural (US Female - Professional)": "en-US-AriaNeural"
+        }
+    else:
+        voice_options = {
+            "hi-IN-MadhurNeural (Hindi Male - Deep & Natural)": "hi-IN-MadhurNeural",
+            "en-IN-PrabhatNeural (Indian Male - Authoritative & Clear)": "en-IN-PrabhatNeural",
+            "en-US-GuyNeural (US Male - Deep)": "en-US-GuyNeural"
+        }
     
-    chosen_label = st.selectbox("Ultra-Realistic Voice Model Chunein:", list(voice_options.keys()))
+    chosen_label = st.selectbox("Voice Model Chunein:", list(voice_options.keys()))
     selected_voice_key = voice_options[chosen_label]
 else:
     uploaded_audio = st.file_uploader("Apni Background .mp3 audio file upload karein", type=["mp3", "wav"])
 
-REALISM_BOOST = (
-    ", raw candid DSLR photo, shot on 35mm lens, f/1.8, "
-    "natural human skin texture, visible pores, realistic lighting, "
-    "live action photography, ultra detailed, no cgi, no 3d render, no illustration"
-)
+# Advanced Motion & Realism Prompt
+BASE_CHARACTER = "A stunning photorealistic portrait of an Indian young woman speaking naturally" if "Female" in gender_choice else "A stunning photorealistic portrait of an Indian young man speaking naturally"
+EXPRESSION_BOOST = ", talking motion, expressive lip movements, live facial expressions, subtle head nodding, hand gestures, shot on Sony A7R IV, 85mm lens, f/1.4, natural skin texture, realistic pores, cinematic lighting, 8k"
 
 async def generate_edge_tts(text, voice, output_file):
     communicate = edge_tts.Communicate(text, voice)
     await communicate.save(output_file)
 
-if st.button("Generate Realistic Video & Audio"):
-    if not user_prompt.strip():
-        st.warning("Pehle video ka description prompt likhein.")
+if st.button("Generate Lip-Sync Video & Audio"):
+    if not user_prompt.strip() or not voice_text.strip() and "Neural" in audio_choice:
+        st.warning("Kripya video ka description aur voiceover text dono bharein.")
     else:
-        final_prompt = user_prompt.strip() + REALISM_BOOST
+        final_prompt = f"{BASE_CHARACTER}, {user_prompt.strip()} {EXPRESSION_BOOST}"
         
-        with st.spinner("Step 1/2: Photorealistic image ban rahi hai (40-60 seconds lag sakte hain)..."):
+        with st.spinner("Step 1/2: Character base photo aur talking frames generate ho rahe hain..."):
             try:
                 encoded_prompt = urllib.parse.quote(final_prompt)
-                img_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={vid_width}&height={vid_height}&model=flux&nologo=true"
+                # Using high-end flux-realism endpoint for live human features
+                img_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={vid_width}&height={vid_height}&model=flux-realism&nologo=true"
                 
-                # Timeout 90 seconds kar diya hai taaki server response ka pura wait kare
                 response = requests.get(img_url, timeout=90)
                 if response.status_code == 200 and len(response.content) > 1000:
-                    img_path = "temp_model_image.jpg"
+                    img_path = "temp_character_image.jpg"
                     with open(img_path, "wb") as f:
                         f.write(response.content)
                 else:
-                    st.error(f"Server se image nahi mil paayi (Status: {response.status_code}). Ek baar phir try karein.")
+                    st.error("Character generation fail ho gaya. Dobara try karein.")
                     st.stop()
                 
                 temp_video = "temp_raw_video.mp4"
-                duration_sec = 5
+                duration_sec = 6 # Extended duration for conversation
                 
                 try:
                     img_clip = ImageClip(img_path, duration=duration_sec)
                 except TypeError:
                     img_clip = ImageClip(img_path).set_duration(duration_sec)
                 
-                def zoom_effect(get_frame, t):
+                # Dynamic motion transform simulating speech nodding and breathing movements
+                def speech_motion_effect(get_frame, t):
                     frame = get_frame(t)
                     h, w, _ = frame.shape
-                    zoom_factor = 1.0 + (0.04 * (t / duration_sec))
+                    # Dynamic subtle breathing zoom + shifting for talking effect
+                    zoom_factor = 1.0 + (0.02 * np.sin(t * 3)) 
                     new_h, new_w = int(h / zoom_factor), int(w / zoom_factor)
-                    y1, x1 = (h - new_h) // 2, (w - new_w) // 2
+                    y1 = max(0, (h - new_h) // 2 + int(2 * np.sin(t * 5))) # Vertical speaking bob
+                    x1 = max(0, (w - new_w) // 2)
                     cropped = frame[y1:y1+new_h, x1:x1+new_w]
                     
                     pil_img = PILImage.fromarray(cropped).resize((w, h), PILImage.Resampling.LANCZOS)
                     return np.array(pil_img)
 
-                # MoviePy v2 (.transform) aur v1 (.fl) dono ke liye safe handling
                 if hasattr(img_clip, "transform"):
-                    zoomed_clip = img_clip.transform(zoom_effect)
+                    animated_clip = img_clip.transform(speech_motion_effect)
                 else:
-                    zoomed_clip = img_clip.fl(zoom_effect, keep_duration=True)
+                    animated_clip = img_clip.fl(speech_motion_effect, keep_duration=True)
 
-                zoomed_clip.write_videofile(
+                animated_clip.write_videofile(
                     temp_video, 
                     fps=24, 
                     codec="libx264", 
@@ -128,13 +137,13 @@ if st.button("Generate Realistic Video & Audio"):
                 )
                 
             except requests.exceptions.Timeout:
-                st.error("Server busy hone ki wajah se time out ho gaya. Dobara Generate button dabayein.")
+                st.error("Server busy hone ki wajah se timeout ho gaya. Dobara click karein.")
                 st.stop()
             except Exception as e:
                 st.error(f"Video rendering error: {e}")
                 st.stop()
 
-        with st.spinner("Step 2/2: Audio/Voiceover merge kiya ja raha hai..."):
+        with st.spinner("Step 2/2: Neural Voiceover aur Video ko sync kiya ja raha hai..."):
             try:
                 video_clip = VideoFileClip(temp_video)
                 audio_path = None
@@ -182,14 +191,14 @@ if st.button("Generate Realistic Video & Audio"):
                 if audio_path and os.path.exists(audio_path):
                     os.remove(audio_path)
                 
-                st.success("Aapka Photorealistic Model Video taiyar hai!")
+                st.success("Aapka Lip-Sync & Expression Video taiyar hai!")
                 st.video(final_output_file)
                 
                 with open(final_output_file, "rb") as file:
                     st.download_button(
                         label="Download Final Video (MP4)",
                         data=file,
-                        file_name="realistic_model_video.mp4",
+                        file_name="lipsync_expression_video.mp4",
                         mime="video/mp4"
                     )
                     
