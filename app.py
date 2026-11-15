@@ -1,3 +1,4 @@
+
 import streamlit as st
 import requests
 import os
@@ -36,7 +37,7 @@ else:
 # 2. Story / Script Input
 story_script = st.text_area(
     "Apni poori Story / Script yahan likhein (Hindi / Hinglish / English):",
-    value="Ek ladka roz ek ladki ko park mein dekhta tha. Ladki jab bhi muskurati, ladke ka din ban jaata. Ek din himmat karke ladke ne ladki se baat ki. Dheere-dheere dono dost bane aur phir ek doosre se pyaar karne lage.\nDono saath ghoomte, coffee peete aur apne future ke sapne dekhte. Ek din ladki ko doosre shehar jaana pada. Jaate waqt usne ladke se kaha, 'Kya tum mera intezaar karoge?'\nLadke ne muskurakar kaha, 'Jab mohabbat sachchi ho, toh intezaar bhi khoobsurat lagta hai.'\nKuch mahino baad ladki wapas aayi. Ladka aaj bhi usi park mein uska intezaar kar raha تھا۔ Dono ek doosre ko dekhkar muskuraaye aur gale lag gaye.",
+    value="Ek ladka roz ek ladki ko park mein dekhta tha. Ladki jab bhi muskurati, ladke ka din ban jaata. Ek din himmat karke ladke ne ladki se baat ki. Dheere-dheere dono dost bane aur phir ek doosre se pyaar karne lage.\nDono saath ghoomte, coffee peete aur apne future ke sapne dekhte. Ek din ladki ko doosre shehar jaana pada. Jaate waqt usne ladke se kaha, 'Kya tum mera intezaar karoge?'\nLadke ne muskurakar kaha, 'Jab mohabbat sachchi ho, toh intezaar bhi khoobsurat lagta hai.'\nKuch mahino baad ladki wapas aayi. Ladka aaj bhi usi park mein uska intezaar kar raha tha. Dono ek doosre ko dekhkar muskuraaye aur gale lag gaye.",
     height=150
 )
 
@@ -78,7 +79,7 @@ if st.button("Generate Full Story Reel"):
                 st.error(f"Voice error: {e}")
                 st.stop()
 
-        # Step 2: Split story into 4 distinct visual scenes based on the narrative flow
+        # Step 2: Split story into 4 distinct visual scenes with safe sequential loading
         scene_prompts = [
             f"A romantic young Indian man and woman smiling at each other in a lush green public park, golden hour sunlight, candid street photography {LIVE_ACTION_BOOST}",
             f"A romantic couple sitting together in a cozy modern cafe, drinking coffee, laughing happily, intimate candid shot {LIVE_ACTION_BOOST}",
@@ -88,40 +89,57 @@ if st.button("Generate Full Story Reel"):
         
         scene_image_paths = []
         
-        with st.spinner("Step 2/4: Story ke liye 4 alag-alag HD scenes render ho rahe hain..."):
-            for i, prompt in enumerate(scene_prompts):
-                encoded_prompt = urllib.parse.quote(prompt)
-                img_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={vid_width}&height={vid_height}&model=flux-realism&nologo=true"
-                
-                img_path = f"temp_scene_{i+1}.jpg"
-                success = False
-                
-                for _ in range(2): # Retry once if fails
-                    try:
-                        res = requests.get(img_url, timeout=40)
-                        if res.status_code == 200 and len(res.content) > 1500:
-                            with open(img_path, "wb") as f:
-                                f.write(res.content)
-                            scene_image_paths.append(img_path)
-                            success = True
-                            break
-                    except Exception:
-                        time.sleep(1)
-                
-                if not success:
-                    # Fallback default image if a scene fails
-                    fallback_url = f"https://image.pollinations.ai/prompt/romantic%20couple%20in%20park%20photorealistic?width={vid_width}&height={vid_height}&nologo=true"
-                    try:
-                        res = requests.get(fallback_url, timeout=30)
-                        if res.status_code == 200:
-                            with open(img_path, "wb") as f:
-                                f.write(res.content)
-                            scene_image_paths.append(img_path)
-                    except Exception:
-                        pass
+        # Progress bar for visual generation
+        progress_text = st.empty()
+        progress_bar = st.progress(0)
+        
+        for i, prompt in enumerate(scene_prompts):
+            progress_text.text(f"Step 2/4: Scene {i+1} of 4 render ho raha hai...")
+            progress_bar.progress((i + 1) * 25)
+            
+            encoded_prompt = urllib.parse.quote(prompt)
+            img_path = f"temp_scene_{i+1}.jpg"
+            success = False
+            
+            # Try multiple URLs/endpoints with delay to prevent server congestion
+            urls = [
+                f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={vid_width}&height={vid_height}&model=flux-realism&nologo=true&seed={100+i}",
+                f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={vid_width}&height={vid_height}&nologo=true&seed={200+i}",
+                f"https://image.pollinations.ai/prompt/romantic%20couple%20in%20park%20candid%20photography?width={vid_width}&height={vid_height}&nologo=true"
+            ]
+            
+            for url in urls:
+                try:
+                    res = requests.get(url, timeout=35)
+                    if res.status_code == 200 and len(res.content) > 1500:
+                        with open(img_path, "wb") as f:
+                            f.write(res.content)
+                        scene_image_paths.append(img_path)
+                        success = True
+                        break
+                except Exception:
+                    time.sleep(2)
+                    continue
+            
+            if not success:
+                # Fallback solid placeholder image frame if everything fails
+                try:
+                    fallback_url = f"https://image.pollinations.ai/prompt/indian%20couple%20candid%20portrait?width={vid_width}&height={vid_height}&nologo=true"
+                    res = requests.get(fallback_url, timeout=20)
+                    if res.status_code == 200:
+                        with open(img_path, "wb") as f:
+                            f.write(res.content)
+                        scene_image_paths.append(img_path)
+                except Exception:
+                    pass
+            
+            time.sleep(1.5) # Small buffer between requests for server stability
+
+        progress_text.empty()
+        progress_bar.empty()
 
         if len(scene_image_paths) == 0:
-            st.error("Visuals generate nahi ho paaye. Dobara koshish karein.")
+            st.error("Visuals generate nahi ho paaye. Kripya 10 seconds baad dobara click karein.")
             st.stop()
 
         # Step 3: Calculate duration per scene and build clips
@@ -129,7 +147,7 @@ if st.button("Generate Full Story Reel"):
             try:
                 audio_clip = AudioFileClip(audio_path)
                 total_duration = audio_clip.duration
-                scene_duration = total_duration / len(scene_image_paths) # Divide audio equally among scenes
+                scene_duration = total_duration / len(scene_image_paths)
                 
                 clip_files = []
                 for i, img_p in enumerate(scene_image_paths):
@@ -149,7 +167,6 @@ if st.button("Generate Full Story Reel"):
                     img_clip.close()
                     clip_files.append(out_clip_name)
                 
-                # Concatenate all scenes together
                 loaded_clips = [VideoFileClip(c) for c in clip_files]
                 final_video = concatenate_videoclips(loaded_clips, method="compose")
                 
