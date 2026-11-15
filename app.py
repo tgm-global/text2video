@@ -4,6 +4,7 @@ import os
 import asyncio
 import edge_tts
 import urllib.parse
+import time
 
 # Safe MoviePy Import (v1 & v2 compatible)
 try:
@@ -11,9 +12,9 @@ try:
 except ImportError:
     from moviepy.editor import VideoFileClip, AudioFileClip, ImageClip
 
-st.set_page_config(page_title="Instagram Reel Generator (Static HD Art)", layout="centered")
+st.set_page_config(page_title="Instagram Reel Generator (Auto-Retry HD)", layout="centered")
 st.title("Instagram HD Reel Generator")
-st.write("Hinglish prompt se ekdum clean, real-looking HD image aur natural voiceover wali reel banayein.")
+st.write("Hinglish prompt se clean HD image aur natural voiceover wali reel banayein.")
 
 # 1. Format Selection (Reels 9:16)
 aspect_ratio = st.selectbox(
@@ -58,7 +59,7 @@ else:
 chosen_label = st.selectbox("Neural Voice Model Chunein:", list(voice_options.keys()))
 selected_voice_key = voice_options[chosen_label]
 
-# Strict Real Live-Action Booster (Clean, HD, Non-animated look)
+# Strict Real Live-Action Booster
 LIVE_ACTION_BOOST = (
     ", professional raw unedited DSLR photograph, shot on Sony A7R IV, 50mm lens, f/1.4 aperture, "
     "authentic human skin texture, natural pores, candid facial expressions, realistic ambient lighting, "
@@ -103,24 +104,39 @@ if st.button("Generate HD Reel Video"):
                 st.error(f"Voice generation error: {e}")
                 st.stop()
 
-        # Step 2: Generate Sharp HD Static Image and Convert to Video (No Motion)
-        with st.spinner("Step 2/3: High-definition static image render ho rahi hai..."):
+        # Step 2: Generate HD Image with Auto-Retry Mechanism
+        img_path = "temp_reel_frame.jpg"
+        image_success = False
+        
+        with st.spinner("Step 2/3: High-definition image render ho rahi hai (Auto-retry active)..."):
+            encoded_prompt = urllib.parse.quote(final_prompt)
+            
+            # Multiple backup API endpoints / seeds for 100% reliability
+            api_urls = [
+                f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={vid_width}&height={vid_height}&model=flux-realism&nologo=true",
+                f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={vid_width}&height={vid_height}&model=flux&nologo=true",
+                f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={vid_width}&height={vid_height}&nologo=true"
+            ]
+            
+            for attempt, img_url in enumerate(api_urls):
+                try:
+                    response = requests.get(img_url, timeout=45)
+                    if response.status_code == 200 and len(response.content) > 1500:
+                        with open(img_path, "wb") as f:
+                            f.write(response.content)
+                        image_success = True
+                        break
+                except Exception:
+                    time.sleep(2) # Wait 2 seconds before trying next backup URL
+                    continue
+            
+            if not image_success:
+                st.error("Server par traffic zyada hone ki wajah se image load nahi ho paayi. Kripya 10 segundos baad 'Generate HD Reel Video' par dobara click karein.")
+                st.stop()
+            
+            # Convert to Video (Static HD Image)
             try:
-                encoded_prompt = urllib.parse.quote(final_prompt)
-                img_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={vid_width}&height={vid_height}&model=flux-realism&nologo=true"
-                
-                response = requests.get(img_url, timeout=90)
-                if response.status_code == 200 and len(response.content) > 1000:
-                    img_path = "temp_reel_frame.jpg"
-                    with open(img_path, "wb") as f:
-                        f.write(response.content)
-                else:
-                    st.error("Visual generation fail ho gaya. Dobara click karein.")
-                    st.stop()
-                
                 temp_video = "temp_raw_reel_video.mp4"
-                
-                # Create a completely static ImageClip with zero movement/zoom
                 try:
                     img_clip = ImageClip(img_path, duration=target_duration)
                 except TypeError:
@@ -134,10 +150,6 @@ if st.button("Generate HD Reel Video"):
                     preset="medium"
                 )
                 img_clip.close()
-                
-            except requests.exceptions.Timeout:
-                st.error("Server timeout ho gaya. Dobara Generate button dabayein.")
-                st.stop()
             except Exception as e:
                 st.error(f"Video rendering error: {e}")
                 st.stop()
